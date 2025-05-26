@@ -53,7 +53,7 @@ pub struct LobbyInfo {
     pub teams: Vec<Vec<PlayerId>>,
     pub leader: PlayerId,
     pub in_champ_select: bool,
-    pub selected_champs: HashMap<PlayerId, String>
+    pub selected_champs: HashMap<PlayerId, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

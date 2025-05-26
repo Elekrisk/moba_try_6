@@ -193,7 +193,7 @@ mod wee {
                 teams: self.teams.clone(),
                 leader: self.leader,
                 in_champ_select: self.in_champ_select,
-                selected_champs: self.selected_champs.clone()
+                selected_champs: self.selected_champs.clone(),
             }
         }
 
@@ -575,7 +575,7 @@ mod wee {
                     lobby.in_champ_select = true;
 
                     _ = self.broadcast_message(lobby_id, None, LobbyToClient::GoToChampSelect);
-                },
+                }
                 ClientToLobby::SelectChamp(champ) => {
                     let Some(player) = self.players.get(&player_id) else {
                         bail!("Player doesn't exist");
@@ -589,8 +589,12 @@ mod wee {
 
                     lobby.selected_champs.insert(player_id, champ.clone());
 
-                    _ = self.broadcast_message(lobby_id, None, LobbyToClient::PlayerSelectedChamp(player_id, champ));
-                },
+                    _ = self.broadcast_message(
+                        lobby_id,
+                        None,
+                        LobbyToClient::PlayerSelectedChamp(player_id, champ),
+                    );
+                }
             }
 
             Ok(())
@@ -616,12 +620,16 @@ mod wee {
                 lobby.in_champ_select = false;
                 lobby.selected_champs.clear();
             }
-            
+
             if lobby.is_empty() {
                 self.lobbies.remove(&lobby_id);
             } else {
                 if in_champ_select {
-                    _ = self.broadcast_message(lobby_id, None, LobbyToClient::ReturnFromChampSelect); 
+                    _ = self.broadcast_message(
+                        lobby_id,
+                        None,
+                        LobbyToClient::ReturnFromChampSelect,
+                    );
                 }
                 let _ = self.broadcast_message(
                     lobby_id,

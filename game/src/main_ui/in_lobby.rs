@@ -16,10 +16,12 @@ use crate::{
 };
 
 use super::{
+    LobbyAnchor, LobbyMenuState,
     lobby_list::{
         LobbyInfoReceived, MyPlayerId, PlayerChangedPositions, PlayerChangedTeam,
         PlayerInfoReceived, PlayerJoinedLobby, PlayerLeftLobby, WeJoinedLobby, WeLeftLobby,
-    }, send_msg, LobbyAnchor, LobbyMenuState
+    },
+    send_msg,
 };
 
 pub mod player_slot;

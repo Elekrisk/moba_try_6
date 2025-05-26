@@ -16,8 +16,8 @@ use bevy::{
 mod r#async;
 mod main_ui;
 mod network;
-pub mod ui;
 pub mod new_ui;
+pub mod ui;
 
 pub use network::LobbySender;
 use ui::custom_effect;

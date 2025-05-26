@@ -11,14 +11,18 @@ use crate::{
     ui::{ObservedBy, button::button2, scrollable, tab_bar::tab_bar, text::text},
 };
 
+mod in_champ_select;
 mod in_lobby;
 mod lobby_list;
-mod in_champ_select;
 
 pub fn client(app: &mut App) {
     app.insert_state(ConnectionState::NotConnected)
         .add_sub_state::<LobbyMenuState>()
-        .add_plugins((lobby_list::client, in_lobby::client, in_champ_select::client))
+        .add_plugins((
+            lobby_list::client,
+            in_lobby::client,
+            in_champ_select::client,
+        ))
         .add_systems(OnEnter(ClientState::NotInGame), create_ui)
         .add_systems(
             OnEnter(ConnectionState::NotConnected),

@@ -143,13 +143,13 @@ fn listen_to_lobby_server(
                 }
                 LobbyToClient::GoToChampSelect => {
                     commands.trigger(GoToChampSelect);
-                },
+                }
                 LobbyToClient::ReturnFromChampSelect => {
                     commands.trigger(ReturnFromChampSelect);
-                },
+                }
                 LobbyToClient::PlayerSelectedChamp(player_id, champ) => {
                     commands.trigger(PlayerSelectedChamp(player_id, champ));
-                },
+                }
             },
         }
     }

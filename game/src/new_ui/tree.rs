@@ -1,4 +1,7 @@
-use bevy::{ecs::{system::SystemId, world::CommandQueue}, prelude::*};
+use bevy::{
+    ecs::{system::SystemId, world::CommandQueue},
+    prelude::*,
+};
 
 use super::{BoxedView, BoxedWidget, ErasedView, View};
 
@@ -10,7 +13,10 @@ pub trait UiFunc: Send + Sync + 'static {
     fn run(&mut self, entity: Entity, world: &mut World) -> Option<BoxedView>;
 }
 
-pub struct UiFuncSystem<V: ErasedView, S: System<In = (), Out = Option<V>>>(S, Option<SystemId<(), Option<V>>>);
+pub struct UiFuncSystem<V: ErasedView, S: System<In = (), Out = Option<V>>>(
+    S,
+    Option<SystemId<(), Option<V>>>,
+);
 
 impl<V: ErasedView, S: System<In = (), Out = Option<V>> + Clone> Clone for UiFuncSystem<V, S> {
     fn clone(&self) -> Self {
@@ -23,24 +29,37 @@ impl<V: ErasedView, S: System<In = (), Out = Option<V>> + Clone> UiFunc for UiFu
         if self.1.is_none() {
             self.1 = Some(world.register_system(self.0.clone()));
         }
-        world.run_system(self.1.unwrap()).unwrap().map(BoxedView::new)
+        world
+            .run_system(self.1.unwrap())
+            .unwrap()
+            .map(BoxedView::new)
     }
 }
 
-pub struct UiFuncSystemIn<V: ErasedView, S: System<In = In<Entity>, Out = Option<V>>>(S, Option<SystemId<In<Entity>, Option<V>>>);
+pub struct UiFuncSystemIn<V: ErasedView, S: System<In = In<Entity>, Out = Option<V>>>(
+    S,
+    Option<SystemId<In<Entity>, Option<V>>>,
+);
 
-impl<V: ErasedView, S: System<In = In<Entity>, Out = Option<V>> + Clone> Clone for UiFuncSystemIn<V, S> {
+impl<V: ErasedView, S: System<In = In<Entity>, Out = Option<V>> + Clone> Clone
+    for UiFuncSystemIn<V, S>
+{
     fn clone(&self) -> Self {
         Self(self.0.clone(), self.1.clone())
     }
 }
 
-impl<V: ErasedView, S: System<In = In<Entity>, Out = Option<V>> + Clone> UiFunc for UiFuncSystemIn<V, S> {
+impl<V: ErasedView, S: System<In = In<Entity>, Out = Option<V>> + Clone> UiFunc
+    for UiFuncSystemIn<V, S>
+{
     fn run(&mut self, entity: Entity, world: &mut World) -> Option<BoxedView> {
         if self.1.is_none() {
             self.1 = Some(world.register_system(self.0.clone()));
         }
-        world.run_system_with(self.1.unwrap(), entity).unwrap().map(BoxedView::new)
+        world
+            .run_system_with(self.1.unwrap(), entity)
+            .unwrap()
+            .map(BoxedView::new)
     }
 }
 

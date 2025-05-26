@@ -17,9 +17,9 @@ impl<V: View> Stylable<V> {
         Self {
             style_ref: default(),
             style_override: default(),
-            inner
+            inner,
         }
-    } 
+    }
 }
 
 impl<V: View> Stylable<V> {
@@ -28,7 +28,11 @@ impl<V: View> Stylable<V> {
         self
     }
 
-    pub fn style<T: Reflect + TypePath>(&mut self, item: &str, value: T) -> anyhow::Result<&mut Self> {
+    pub fn style<T: Reflect + TypePath>(
+        &mut self,
+        item: &str,
+        value: T,
+    ) -> anyhow::Result<&mut Self> {
         let value_path = value.reflect_type_path().to_string();
         match item {
             "background_color" => {
@@ -51,7 +55,10 @@ impl<V: View> Stylable<V> {
                     bail!("Style \"{item}\" doesn't exist");
                 };
                 if !field.represents::<T>() {
-                    bail!("Style \"{item}\" takes a value of type {}, not {value_path}", field.reflect_type_path());
+                    bail!(
+                        "Style \"{item}\" takes a value of type {}, not {value_path}",
+                        field.reflect_type_path()
+                    );
                 }
                 self.style_override.node_stuff.insert(item, value);
             }
@@ -78,13 +85,12 @@ impl<V: View> View for Stylable<V> {
             e.insert(self.style_override.clone());
         }
 
-        StylableWidget {
-            inner: widget
-        }
+        StylableWidget { inner: widget }
     }
 
     fn rebuild(&self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
-        self.inner.rebuild(&prev.inner, &mut widget.inner, commands.reborrow());
+        self.inner
+            .rebuild(&prev.inner, &mut widget.inner, commands.reborrow());
         let mut entity = commands.entity(widget.entity());
         if self.style_ref != prev.style_ref {
             entity.insert(self.style_ref.clone());
@@ -99,11 +105,11 @@ pub struct StylableWidget<W: Widget> {
     inner: W,
 }
 
-impl<W:Widget> Widget for StylableWidget<W> {
+impl<W: Widget> Widget for StylableWidget<W> {
     fn entity(&self) -> Entity {
         self.inner.entity()
     }
-    
+
     fn parent(&self) -> Entity {
         self.inner.parent()
     }

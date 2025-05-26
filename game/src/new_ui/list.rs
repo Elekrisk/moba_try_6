@@ -8,9 +8,7 @@ pub struct ListView {
 
 impl ListView {
     pub fn new() -> Self {
-        Self {
-            items: default()
-        }
+        Self { items: default() }
     }
 
     pub fn with(mut self, item: impl ErasedView) -> Self {
@@ -19,7 +17,9 @@ impl ListView {
     }
 
     pub fn add(&mut self, item: impl ErasedView) {
-        self.items.push(BoxedView { inner: Box::new(item) });
+        self.items.push(BoxedView {
+            inner: Box::new(item),
+        });
     }
 }
 
@@ -37,7 +37,11 @@ impl View for ListView {
             })
             .id();
 
-        ListWidget { entity: id, parent: parent.target_entity(), items }
+        ListWidget {
+            entity: id,
+            parent: parent.target_entity(),
+            items,
+        }
     }
 
     fn rebuild(&self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {

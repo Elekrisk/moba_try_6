@@ -132,9 +132,7 @@ fn player_slot_content(player: PlayerId) -> impl Bundle {
         PlayerSlotContents(player),
         ObservedBy::new(
             |trigger: Trigger<Pointer<DragStart>>, mut commands: Commands| {
-                commands
-                    .entity(trigger.target())
-                    .insert(Pickable::IGNORE);
+                commands.entity(trigger.target()).insert(Pickable::IGNORE);
                 commands.entity(trigger.target()).insert(GlobalZIndex(1));
             },
         ),
@@ -153,9 +151,7 @@ fn player_slot_content(player: PlayerId) -> impl Bundle {
                 let mut node = node.get_mut(trigger.target()).unwrap();
                 node.left = Val::Auto;
                 node.top = Val::Auto;
-                commands
-                    .entity(trigger.target())
-                    .remove::<Pickable>();
+                commands.entity(trigger.target()).remove::<Pickable>();
                 commands.entity(trigger.target()).remove::<GlobalZIndex>();
             },
         ),
