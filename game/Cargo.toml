@@ -1,0 +1,48 @@
+[package]
+name = "game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { version = "0.16", features = ["track_location"] }
+# Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.
+log = { version = "0.4", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
+tracing = { version = "0.1", features = [
+    "max_level_debug",
+    "release_max_level_warn",
+] }
+lightyear = "0.20.2"
+xwt-core = "0.6.0"
+# bevy-tokio-tasks = "0.16.0"
+tokio = { version = "1.45", features = ["sync", "io-util", "rt", "macros", "time"]}
+serde = "1.0.219"
+serde_json = "1.0.140"
+lobby_common = { path = "../lobby_common" }
+whoami = "1.6.0"
+anyhow = "1.0.98"
+getrandom = { version = "0.3", features = ["wasm_js"] }
+bevy-inspector-egui = "0.31"
+bevy_enhanced_input = "0.11"
+clap = { version = "4.5.38", features = ["derive"] }
+tracing-appender = "0.2.3"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+wtransport = { version = "0.6.1", features = ["dangerous-configuration"] }
+tokio = { version = "1.45", features = ["sync", "io-util", "rt-multi-thread", "macros", "time"]}
+
+xwt-wtransport = "0.13.2"
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-bindgen-futures = "0.4.50"
+xwt-web = "0.15.0"
+
+# Idiomatic Bevy code often triggers these lints, and the CI workflow treats them as errors.
+# In some cases they may still signal poor code quality however, so consider commenting out these lines.
+[lints.clippy]
+# Bevy supplies arguments to systems via dependency injection, so it's natural for systems to
+# request more than 7 arguments -- which triggers this lint.
+too_many_arguments = "allow"
+# Queries that access many components may trigger this lint.
+type_complexity = "allow"

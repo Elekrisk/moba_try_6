@@ -1,0 +1,15 @@
+[package]
+name = "lobby_server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lobby_common = { path = "../lobby_common" }
+anyhow = "1.0.98"
+uuid = { version = "1.16", features = ["v4", "serde"] }
+serde = { version = "1.0.219", features = ["derive"]}
+serde_json = "1.0.140"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+wtransport = "0.6.1"
+tokio = { version = "1.45.0", features = ["rt-multi-thread"]}
