@@ -115,7 +115,7 @@ fn weee(world: &mut World) {
             let mut tree = entity.get_mut::<UiTree>().unwrap();
             let mut ui = tree.ui.take().unwrap();
             let new_tree = ui.run(e, world);
-            let Some(new_tree) = new_tree else {
+            let Some(mut new_tree) = new_tree else {
                 let mut tree = world.get_mut::<UiTree>(e).unwrap();
                 tree.ui = Some(ui);
                 return;

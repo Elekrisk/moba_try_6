@@ -1,11 +1,10 @@
 use anyhow::bail;
 use bevy::prelude::*;
 
-use crate::ui::style::{Style, StyleLabel, StyleRef};
+use crate::ui::style::{ConditionalStyle, Style, StyleLabel, StyleRef};
 
 use super::{View, Widget};
 
-#[derive(Debug)]
 pub struct Stylable<V: View> {
     pub style_ref: StyleRef,
     pub style_override: Style,
@@ -75,7 +74,7 @@ impl<V: View> Stylable<V> {
 impl<V: View> View for Stylable<V> {
     type Widget = StylableWidget<V::Widget>;
 
-    fn build(&self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
+    fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
         let widget = self.inner.build(parent);
         let mut commands = parent.commands();
         let mut e = commands.entity(widget.entity());
@@ -88,7 +87,7 @@ impl<V: View> View for Stylable<V> {
         StylableWidget { inner: widget }
     }
 
-    fn rebuild(&self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
+    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
         self.inner
             .rebuild(&prev.inner, &mut widget.inner, commands.reborrow());
         let mut entity = commands.entity(widget.entity());

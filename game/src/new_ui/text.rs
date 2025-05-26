@@ -15,7 +15,7 @@ impl TextView {
 impl View for TextView {
     type Widget = TextWidget;
 
-    fn build(&self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
+    fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
         let entity = parent.spawn(Text::new(&self.text)).id();
         TextWidget {
             entity,
@@ -23,7 +23,7 @@ impl View for TextView {
         }
     }
 
-    fn rebuild(&self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
+    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
         if self.text != prev.text {
             let txt = self.text.clone();
             commands

@@ -23,7 +23,7 @@ impl<F: UiFunc + Clone> SubtreeView<F> {
 impl<F: UiFunc + Clone> View for SubtreeView<F> {
     type Widget = SubtreeWidget;
 
-    fn build(&self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
+    fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
         let e = parent.spawn(UiTree::new(self.subtree.clone())).id();
 
         SubtreeWidget {
@@ -32,7 +32,7 @@ impl<F: UiFunc + Clone> View for SubtreeView<F> {
         }
     }
 
-    fn rebuild(&self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
+    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
         if self.label != prev.label {
             commands
                 .entity(widget.entity())

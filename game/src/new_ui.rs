@@ -16,9 +16,10 @@ pub mod stylable;
 pub mod subtree;
 pub mod text;
 pub mod tree;
+pub mod tabbed;
 
 pub fn client(app: &mut App) {
-    app.add_plugins(tree::client);
+    app.add_plugins((tree::client, tabbed::client, button::client));
 }
 
 #[derive(Debug, Default)]
@@ -30,17 +31,17 @@ pub struct Pod {
 pub trait View: Any + Send + Sync {
     type Widget: Widget;
 
-    fn build(&self, parent: &mut ChildSpawnerCommands) -> Self::Widget;
-    fn rebuild(&self, prev: &Self, widget: &mut Self::Widget, commands: Commands);
+    fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget;
+    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, commands: Commands);
     fn structure(&self) -> String {
         "???".into()
     }
 }
 
 pub trait ErasedView: Any + Send + Sync {
-    fn build_erased(&self, parent: &mut ChildSpawnerCommands) -> BoxedWidget;
+    fn build_erased(&mut self, parent: &mut ChildSpawnerCommands) -> BoxedWidget;
     fn rebuild_erased(
-        &self,
+        &mut self,
         prev: &dyn ErasedView,
         widget: &mut dyn ErasedWidget,
         commands: Commands,
@@ -52,14 +53,14 @@ impl<V: View> ErasedView for V
 where
     V::Widget: ErasedWidget + Send + Sync,
 {
-    fn build_erased(&self, parent: &mut ChildSpawnerCommands) -> BoxedWidget {
+    fn build_erased(&mut self, parent: &mut ChildSpawnerCommands) -> BoxedWidget {
         BoxedWidget {
             inner: Box::new(self.build(parent)),
         }
     }
 
     fn rebuild_erased(
-        &self,
+        &mut self,
         prev: &dyn ErasedView,
         widget: &mut dyn ErasedWidget,
         commands: Commands,
@@ -91,11 +92,11 @@ impl BoxedView {
 impl View for BoxedView {
     type Widget = BoxedWidget;
 
-    fn build(&self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
+    fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
         self.inner.build_erased(parent)
     }
 
-    fn rebuild(&self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
+    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
         if (*self.inner).type_id() == (*prev.inner).type_id() {
             self.inner
                 .rebuild_erased(&*prev.inner, &mut *widget.inner, commands);
