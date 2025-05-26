@@ -182,7 +182,7 @@ mod wee {
                 id: self.id,
                 name: self.settings.name.clone(),
                 player_count: self.player_count(),
-                max_player_count: 10,
+                max_player_count: self.settings.max_players_per_team * self.teams.len(),
             }
         }
 
@@ -212,14 +212,23 @@ mod wee {
                 for from_team in (self.settings.team_count..self.teams.len()).rev().map(Team) {
                     let players = &self.teams[from_team.0];
                     // Players need to be moved from this team
-                    for _ in 0..players.len() {
+                    'outer: for _ in 0..players.len() {
                         for &to_team in &teams {
                             if self.teams[to_team.0].len() < self.settings.max_players_per_team {
                                 // We can move them here
                                 let player = self.teams[from_team.0].pop().unwrap();
                                 self.teams[to_team.0].push(player);
-                                break;
+                                continue 'outer;
                             }
+                        }
+                        // We could not find a team with space, just find the one with
+                        // the least amount of players
+                        if let Some(team_to_move_to) = teams.iter().min_by_key(|t| self.teams[t.0].len()) {
+                            let player = self.teams[from_team.0].pop().unwrap();
+                            self.teams[team_to_move_to.0].push(player);
+                        } else {
+                            // There are no teams :(
+                            panic!("Lobby without teams is invalid");
                         }
                     }
                 }
@@ -454,6 +463,7 @@ mod wee {
                         bail!("Player is not lobby leader");
                     }
                     lobby_settings.team_count = lobby_settings.team_count.max(1);
+                    lobby_settings.max_players_per_team = lobby_settings.max_players_per_team.max(1);
                     lobby.settings = lobby_settings;
                     lobby.readjust_if_needed();
                     let info = lobby.get_info();

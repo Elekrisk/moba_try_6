@@ -29,7 +29,7 @@ impl View for ListView {
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
         let mut items = vec![];
         let id = parent
-            .spawn(Node { ..default() })
+            .spawn((Node { ..default() }, Name::new("List")))
             .with_children(|parent| {
                 for item in &mut self.items {
                     items.push(item.build(parent));
@@ -45,7 +45,12 @@ impl View for ListView {
     }
 
     fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
-        for ((item, prev), widget) in self.items.iter_mut().zip(&prev.items).zip(&mut widget.items) {
+        for ((item, prev), widget) in self
+            .items
+            .iter_mut()
+            .zip(&prev.items)
+            .zip(&mut widget.items)
+        {
             item.rebuild(prev, widget, commands.reborrow());
         }
 

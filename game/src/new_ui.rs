@@ -6,20 +6,24 @@ use std::{
 
 use anyhow::bail;
 use bevy::{ecs::component::ComponentId, prelude::*};
+use scrollable::ScrollableView;
 use stylable::Stylable;
 
 use crate::ui::style::{Style, StyleLabel, StyleRef};
 
 pub mod button;
 pub mod list;
+pub mod scrollable;
 pub mod stylable;
 pub mod subtree;
+pub mod tabbed;
 pub mod text;
 pub mod tree;
-pub mod tabbed;
+pub mod custom;
+pub mod optional;
 
 pub fn client(app: &mut App) {
-    app.add_plugins((tree::client, tabbed::client, button::client));
+    app.add_plugins((tree::client, tabbed::client, button::client, scrollable::client));
 }
 
 #[derive(Debug, Default)]
@@ -137,9 +141,27 @@ impl View for BoxedView {
     }
 }
 
+impl View for () {
+    type Widget = (Entity, Entity);
+
+    fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
+        (
+            parent.spawn_empty().id(),
+            parent.target_entity()
+        )
+    }
+
+    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, commands: Commands) {
+        
+    }
+}
+
 pub trait Widget: Any + Send + Sync {
     fn despawn(&self, mut commands: Commands) {
-        commands.entity(self.entity()).despawn();
+        let entity = self.entity();
+        if entity != Entity::PLACEHOLDER {
+            commands.entity(entity).despawn();
+        }
     }
     fn entity(&self) -> Entity;
     fn parent(&self) -> Entity;
@@ -188,9 +210,23 @@ impl Widget for BoxedWidget {
     }
 }
 
+impl Widget for (Entity, Entity) {
+    fn entity(&self) -> Entity {
+        self.0
+    }
+
+    fn parent(&self) -> Entity {
+        self.1
+    }
+}
+
 pub trait ViewExt: View + Sized {
     fn styled(self) -> Stylable<Self> {
         Stylable::new(self)
+    }
+
+    fn scrollable(self) -> ScrollableView<Self> {
+        ScrollableView { inner: self }
     }
 
     fn boxed(self) -> BoxedView {

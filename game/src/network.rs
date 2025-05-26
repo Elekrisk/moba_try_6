@@ -36,6 +36,7 @@ pub struct ConnectToLobbyCommand(pub String);
 
 impl Command for ConnectToLobbyCommand {
     fn apply(self, world: &mut World) {
+        info!("Starting to connect...");
         world
             .run_system_cached_with(connect_to_lobby_server, self.0)
             .unwrap();

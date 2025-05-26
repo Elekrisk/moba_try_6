@@ -3,7 +3,9 @@ use bevy::{
     prelude::*,
 };
 
-use crate::ui::style::{ComponentEquals, ConditionalStyle, DefaultStyle, Styles, style_label};
+use crate::ui::style::{
+    ComponentEquals, ConditionalStyle, DefaultStyle, StyleLabel, StyleRef, Styles, style_label,
+};
 
 use super::{View, Widget};
 
@@ -27,18 +29,21 @@ pub fn setup_styles(mut styles: ResMut<Styles>) {
     let style = styles
         .new_style_from(DefaultButtonStyle, HoverButtonStyle)
         .unwrap();
-    style.background_color = Some(Color::srgb(0.3, 0.3, 0.3));
+    style.background_color = Some(Color::srgb(0.4, 0.4, 0.4));
 
     let style = styles
         .new_style_from(DefaultButtonStyle, PressButtonStyle)
         .unwrap();
-    style.background_color = Some(Color::srgb(0.3, 0.3, 0.3));
+    style.background_color = Some(Color::srgb(0.2, 0.2, 0.2));
 }
 
 pub struct ButtonView<V: View, S: ObserverSystem<Pointer<Click>, ()>> {
     inner: V,
     callback_label: String,
     on_click: Option<S>,
+    pub normal_style: StyleRef,
+    pub hover_style: StyleRef,
+    pub press_style: StyleRef,
 }
 
 impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> ButtonView<V, S> {
@@ -51,6 +56,9 @@ impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> ButtonView<V, S> {
             inner,
             callback_label: label.into(),
             on_click: Some(on_click.to_observer_system()),
+            normal_style: StyleRef::new(DefaultButtonStyle),
+            hover_style: StyleRef::new(HoverButtonStyle),
+            press_style: StyleRef::new(PressButtonStyle),
         }
     }
 }
@@ -69,7 +77,7 @@ impl<M, S: IntoObserverSystem<Pointer<Click>, (), M>> ButtonCallback<(i32, M)> f
     }
 }
 
-impl<M, S: IntoSystem<(), (), M> + Clone + Send + Sync + 'static> ButtonCallback<(i64, M)> for S {
+impl<M, S: IntoSystem<(), (), M> + Send + Sync + 'static> ButtonCallback<(i64, M)> for S {
     type System = impl ObserverSystem<Pointer<Click>, ()>;
 
     fn to_observer_system(self) -> Self::System {
@@ -101,6 +109,7 @@ impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> View for ButtonView<V, S> {
                     .when(ComponentEquals(Interaction::None), DefaultButtonStyle)
                     .when(ComponentEquals(Interaction::Hovered), HoverButtonStyle)
                     .when(ComponentEquals(Interaction::Pressed), PressButtonStyle),
+                Name::new(format!("Button ({})", &self.callback_label)),
             ))
             .with_children(|parent| {
                 inner = Some(self.inner.build(parent));
@@ -122,6 +131,9 @@ impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> View for ButtonView<V, S> {
         self.inner
             .rebuild(&prev.inner, &mut widget.inner, commands.reborrow());
         if self.callback_label != prev.callback_label {
+            commands
+                .entity(widget.entity)
+                .insert(Name::new(format!("Button ({})", &self.callback_label)));
             // Rebuild callback
             commands.entity(widget.observer).despawn();
             let on_click = self.on_click.take().unwrap();

@@ -8,8 +8,7 @@ use bevy::{
 
 pub fn client(app: &mut App) {
     app.insert_resource(Styles::new_with_default())
-        .add_systems(Update, update_with_style2)
-        .add_systems(Update, update_conditional_style);
+        .add_systems(PostUpdate, (update_conditional_style, update_with_style2).chain());
 }
 
 // #[derive(Resource)]
@@ -230,9 +229,9 @@ impl Style {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.background_color.is_some()
-            || self.border_color.is_some()
-            || self.node_stuff.field_len() == 0
+        self.background_color.is_none()
+            && self.border_color.is_none()
+            && self.node_stuff.field_len() == 0
     }
 }
 
@@ -249,7 +248,13 @@ impl Clone for Style {
 
 #[derive(Component)]
 pub struct ConditionalStyle {
-    pub x: Vec<Box<dyn StyleExtractor + Send + Sync>>,
+    pub x: Vec<Box<dyn StyleExtractor>>,
+}
+
+impl Clone for ConditionalStyle {
+    fn clone(&self) -> Self {
+        Self { x: self.x.iter().map(|x| x.boxed_clone()).collect() }
+    }
 }
 
 impl ConditionalStyle {
@@ -274,33 +279,44 @@ impl ConditionalStyle {
 
 pub trait StyleExtractor: Send + Sync + 'static {
     fn extract(&self, entity: EntityRef) -> Option<StyleRef>;
+    fn boxed_clone(&self) -> Box<dyn StyleExtractor>;
 }
 
-impl<F: Fn(EntityRef) -> Option<StyleRef> + Send + Sync + 'static> StyleExtractor for F {
+impl<F: Fn(EntityRef) -> Option<StyleRef> + Send + Sync + 'static + Clone> StyleExtractor for F {
     fn extract(&self, entity: EntityRef) -> Option<StyleRef> {
         self(entity)
     }
+    
+    fn boxed_clone(&self) -> Box<dyn StyleExtractor> {
+        Box::new(self.clone())
+    }
+    
 }
 
 impl<C: StyleCondition> StyleExtractor for (C, StyleRef) {
     fn extract(&self, entity: EntityRef) -> Option<StyleRef> {
         self.0.test(entity).then(|| self.1.clone())
     }
+    
+    fn boxed_clone(&self) -> Box<dyn StyleExtractor> {
+        Box::new(self.clone())
+    }
 }
 
-pub trait StyleCondition: Send + Sync + 'static {
+pub trait StyleCondition: Clone + Send + Sync + 'static {
     fn test(&self, entity: EntityRef) -> bool;
 }
 
-impl<F: Fn(EntityRef) -> bool + Send + Sync + 'static> StyleCondition for F {
+impl<F: Fn(EntityRef) -> bool + Send + Sync + 'static + Clone> StyleCondition for F {
     fn test(&self, entity: EntityRef) -> bool {
         self(entity)
     }
 }
 
-pub struct ComponentEquals<C: Component + PartialEq>(pub C);
+#[derive(Clone)]
+pub struct ComponentEquals<C: Component + Clone + PartialEq>(pub C);
 
-impl<C: Component + PartialEq> StyleCondition for ComponentEquals<C> {
+impl<C: Component + Clone + PartialEq> StyleCondition for ComponentEquals<C> {
     fn test(&self, entity: EntityRef) -> bool {
         entity.get::<C>() == Some(&self.0)
     }
@@ -315,6 +331,12 @@ impl<C: Component> HasComponent<C> {
         Self {
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<C: Component> Clone for HasComponent<C> {
+    fn clone(&self) -> Self {
+        Self { _phantom: self._phantom.clone() }
     }
 }
 

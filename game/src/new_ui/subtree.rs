@@ -3,28 +3,55 @@ pub use bevy::prelude::*;
 
 use super::{
     View, Widget,
-    tree::{IntoUiFunc, UiFunc, UiTree},
+    tree::{IfRunner, IntoUiFunc, OnceRunner, UiFunc, UiTree},
 };
 
-pub struct SubtreeView<F: UiFunc + Clone> {
+pub struct SubtreeView<F: UiFunc> {
     label: String,
-    subtree: F,
+    subtree: Option<F>,
 }
 
-impl<F: UiFunc + Clone> SubtreeView<F> {
+impl<F: UiFunc> SubtreeView<F> {
     pub fn new<M, I: IntoUiFunc<M, UiFunc = F>>(label: impl Into<String>, subtree: I) -> Self {
         Self {
             label: label.into(),
-            subtree: subtree.into_ui_func(),
+            subtree: Some(subtree.into_ui_func()),
         }
     }
 }
 
-impl<F: UiFunc + Clone> View for SubtreeView<F> {
+impl<F: UiFunc> SubtreeView<OnceRunner<F>> {
+    pub fn once<M, I: IntoUiFunc<M, UiFunc = F>>(label: impl Into<String>, subtree: I) -> Self {
+        Self {
+            label: label.into(),
+            subtree: Some(OnceRunner::new(subtree.into_ui_func())),
+        }
+    }
+}
+
+impl<F: UiFunc, C: Fn(&World) -> bool + Send + Sync + 'static> SubtreeView<IfRunner<F, C>> {
+    pub fn run_if<M, I: IntoUiFunc<M, UiFunc = F>>(
+        label: impl Into<String>,
+        subtree: I,
+        cond: C,
+    ) -> Self {
+        Self {
+            label: label.into(),
+            subtree: Some(IfRunner::new(subtree.into_ui_func(), cond)),
+        }
+    }
+}
+
+impl<F: UiFunc> View for SubtreeView<F> {
     type Widget = SubtreeWidget;
 
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
-        let e = parent.spawn(UiTree::new(self.subtree.clone())).id();
+        let e = parent
+            .spawn((
+                UiTree::new(self.subtree.take().unwrap()),
+                Name::new(format!("UiTree ({})", self.label)),
+            ))
+            .id();
 
         SubtreeWidget {
             entity: e,
@@ -36,7 +63,9 @@ impl<F: UiFunc + Clone> View for SubtreeView<F> {
         if self.label != prev.label {
             commands
                 .entity(widget.entity())
-                .insert(UiTree::new(self.subtree.clone()));
+                .despawn_related::<Children>()
+                .insert((UiTree::new(self.subtree.take().unwrap()), 
+                Name::new(format!("UiTree ({})", self.label)),));
         }
     }
 }

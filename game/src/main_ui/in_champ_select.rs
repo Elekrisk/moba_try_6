@@ -1,7 +1,7 @@
 use bevy::{ecs::spawn::SpawnIter, prelude::*};
 use lobby_common::{ClientToLobby, PlayerId, Team};
 
-use crate::{LobbySender, ui::text::text};
+use crate::{new_ui::View, ui::text::text, LobbySender};
 
 use super::{
     LobbyAnchor, LobbyMenuState,
@@ -104,4 +104,8 @@ fn on_goto_champ_select(trigger: Trigger<GoToChampSelect>, mut commands: Command
 
 fn on_return_from_champ_select(trigger: Trigger<ReturnFromChampSelect>, mut commands: Commands) {
     commands.set_state(LobbyMenuState::InLobby);
+}
+
+pub fn champ_select2() -> impl View {
+    
 }

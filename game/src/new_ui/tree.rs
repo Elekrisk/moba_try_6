@@ -14,20 +14,20 @@ pub trait UiFunc: Send + Sync + 'static {
 }
 
 pub struct UiFuncSystem<V: ErasedView, S: System<In = (), Out = Option<V>>>(
-    S,
+    Option<S>,
     Option<SystemId<(), Option<V>>>,
 );
 
-impl<V: ErasedView, S: System<In = (), Out = Option<V>> + Clone> Clone for UiFuncSystem<V, S> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone(), self.1.clone())
-    }
-}
+// impl<V: ErasedView, S: System<In = (), Out = Option<V>> + Clone> Clone for UiFuncSystem<V, S> {
+//     fn clone(&self) -> Self {
+//         Self(self.0.clone(), self.1.clone())
+//     }
+// }
 
-impl<V: ErasedView, S: System<In = (), Out = Option<V>> + Clone> UiFunc for UiFuncSystem<V, S> {
+impl<V: ErasedView, S: System<In = (), Out = Option<V>>> UiFunc for UiFuncSystem<V, S> {
     fn run(&mut self, entity: Entity, world: &mut World) -> Option<BoxedView> {
         if self.1.is_none() {
-            self.1 = Some(world.register_system(self.0.clone()));
+            self.1 = Some(world.register_system(self.0.take().unwrap()));
         }
         world
             .run_system(self.1.unwrap())
@@ -77,13 +77,50 @@ impl<F: UiFunc> IntoUiFunc<()> for F {
     }
 }
 
-impl<V: ErasedView, M, S: IntoSystem<(), Option<V>, M, System: Clone> + Send + Sync + 'static>
+impl<V: ErasedView, M, S: IntoSystem<(), Option<V>, M> + Send + Sync + 'static>
     IntoUiFunc<(u32, M, V)> for S
 {
     type UiFunc = UiFuncSystem<V, S::System>;
 
     fn into_ui_func(self) -> Self::UiFunc {
-        UiFuncSystem(IntoSystem::into_system(self), None)
+        UiFuncSystem(Some(IntoSystem::into_system(self)), None)
+    }
+}
+
+pub struct OnceRunner<F: UiFunc>(F, bool);
+
+impl<F: UiFunc> OnceRunner<F> {
+    pub fn new<M, I: IntoUiFunc<M, UiFunc = F>>(func: I) -> Self {
+        Self(func.into_ui_func(), false)
+    }
+}
+
+impl<F: UiFunc> UiFunc for OnceRunner<F> {
+    fn run(&mut self, entity: Entity, world: &mut World) -> Option<BoxedView> {
+        if self.1 == false {
+            self.1 = true;
+            self.0.run(entity, world)
+        } else {
+            None
+        }
+    }
+}
+
+pub struct IfRunner<F: UiFunc, C: Fn(&World) -> bool + Send + Sync + 'static>(F, C);
+
+impl<F: UiFunc, C: Fn(&World) -> bool + Send + Sync + 'static> IfRunner<F, C> {
+    pub fn new<M, I: IntoUiFunc<M, UiFunc = F>>(func: I, cond: C) -> Self {
+        Self(func.into_ui_func(), cond)
+    }
+}
+
+impl<F: UiFunc, C: Fn(&World) -> bool + Send + Sync + 'static> UiFunc for IfRunner<F, C> {
+    fn run(&mut self, entity: Entity, world: &mut World) -> Option<BoxedView> {
+        if (self.1)(world) {
+            self.0.run(entity, world)
+        } else {
+            None
+        }
     }
 }
 
@@ -103,15 +140,35 @@ impl UiTree {
             prev: None,
         }
     }
+
+    pub fn once<M>(f: impl IntoUiFunc<M>) -> Self {
+        Self {
+            ui: Some(Box::new(OnceRunner::new(f))),
+            widget: None,
+            prev: None,
+        }
+    }
+
+    pub fn run_if<M>(f: impl IntoUiFunc<M>, cond: impl Fn(&World) -> bool + Send + Sync + 'static) -> Self {
+        Self {
+            ui: Some(Box::new(IfRunner::new(f, cond))),
+            widget: None,
+            prev: None,
+        }
+    }
 }
 
 fn weee(world: &mut World) {
     let mut q = world.query_filtered::<Entity, With<UiTree>>();
+    world.flush();
     let mut command_queue = CommandQueue::default();
     let mut commands = Commands::new(&mut command_queue, world);
     for e in q.iter(world) {
         commands.queue(move |world: &mut World| {
-            let mut entity = world.entity_mut(e);
+            let Ok(mut entity) = world.get_entity_mut(e) else {
+                // Ui tree entity was despawned
+                return;
+            };
             let mut tree = entity.get_mut::<UiTree>().unwrap();
             let mut ui = tree.ui.take().unwrap();
             let new_tree = ui.run(e, world);

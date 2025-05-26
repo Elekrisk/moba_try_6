@@ -53,10 +53,10 @@ pub macro custom_effect($name:ident $(<$($t:ident),* $(,)?> $(where $($tt:tt)*)?
 
 pub fn client(app: &mut App) {
     app.add_plugins((
-        tab_bar::client,
-        scrollable::client,
-        text::client,
-        button::client,
+        // tab_bar::client,
+        // scrollable::client,
+        // text::client,
+        // button::client,
         style::client,
     ));
 }

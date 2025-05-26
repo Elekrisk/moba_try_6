@@ -14,13 +14,12 @@ use lobby_common::{
 use tokio::sync::mpsc::error::TryRecvError;
 
 use crate::{
-    LobbyMode, Options,
-    main_ui::ConnectionState,
-    network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender},
-    ui::{ObservedBy, button::button2, scrollable, text::text},
+    main_ui::ConnectionState, network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender}, new_ui::{
+        button::ButtonView, list::ListView, subtree::SubtreeView, text::TextView, tree::IfRunner, ErasedView, View, ViewExt
+    }, ui::{button::button2, scrollable, text::text, ObservedBy}, LobbyMode, Options
 };
 
-use super::{LobbyAnchor, LobbyMenuState, send_msg};
+use super::{in_champ_select::champ_select2, in_lobby::lobby_ui2, send_msg, LobbyAnchor, LobbyMenuState};
 
 pub fn client(app: &mut App) {
     app.add_systems(Update, listen_to_lobby_server)
@@ -236,15 +235,88 @@ fn refresh_lobby_list(sender: Res<LobbySender>) {
 
 fn populate_lobby_list(
     lobbies: In<Vec<LobbyShortInfo>>,
-    anchor: Single<Entity, With<LobbyAnchor>>,
+    // anchor: Single<Entity, With<LobbyAnchor>>,
     mut commands: Commands,
 ) {
-    commands
-        .entity(*anchor)
-        .despawn_related::<Children>()
-        .with_child(lobby_list(&lobbies));
+    // commands
+    //     .entity(*anchor)
+    //     .despawn_related::<Children>()
+    //     .with_child(lobby_list(&lobbies));
+    // commands.insert_resource(LobbyList(lobbies.0));
+    commands.insert_resource(LobbyList(
+       lobbies.0
+    ));
 }
 
 fn on_lobby_disconnect(trigger: Trigger<LobbyConnectionLost>, mut commands: Commands) {
     commands.set_state(ConnectionState::NotConnected);
+}
+
+#[derive(Resource)]
+struct LobbyList(Vec<LobbyShortInfo>);
+
+pub fn connected_to_lobby_server(lobby_state: Res<State<LobbyMenuState>>) -> Option<impl View + use<>> {
+    if !lobby_state.is_changed() {
+        return None;
+    }
+
+    Some(match lobby_state.get() {
+        LobbyMenuState::LobbyList => lobby_list2().boxed(),
+        LobbyMenuState::InLobby => lobby_ui2().boxed(),
+        LobbyMenuState::InChampSelect => champ_select2().boxed(),
+    })
+}
+
+pub fn lobby_list2() -> impl View {
+    ListView::new()
+    .with(ListView::new()
+        .with(ButtonView::new(TextView::new("Create Lobby"), "create lobby", send_msg(ClientToLobby::CreateAndJoinLobby)))
+        .with(ButtonView::new(TextView::new("Refresh"), "refresh", send_msg(ClientToLobby::FetchLobbyList)))
+    ).with(
+        SubtreeView::new(
+            "lobby_list",
+            IfRunner::new(lobby_list3, |world| world.contains_resource::<LobbyList>()),
+        ).styled().height(Val::Px(0.0)).flex_grow(1.0).flex_basis(Val::Px(0.0))
+    )
+    .styled()
+    .width(Val::Percent(100.0))
+    .height(Val::Percent(100.0))
+    .flex_direction(FlexDirection::Column)
+    .flex_grow(1.0)
+}
+
+fn lobby_list3(list: Res<LobbyList>) -> Option<impl View + use<>> {
+    if !list.is_changed() {
+        return None;
+    }
+
+    let mut list_view = ListView::new();
+    for lobby in &list.0 {
+        list_view.add(lobby_list_entry2(lobby));
+    }
+
+    Some(
+        list_view
+            .styled()
+            .flex_direction(FlexDirection::Column)
+            .flex_grow(1.0)
+            .scrollable(),
+    )
+}
+
+fn lobby_list_entry2(info: &LobbyShortInfo) -> impl View + use<> {
+    ListView::new()
+        .with(TextView::new(&info.name).styled().flex_grow(1.0))
+        .with(TextView::new(format!(
+            "{}/{}",
+            info.player_count, info.max_player_count
+        )))
+        .with(ButtonView::new(
+            TextView::new("Join"),
+            format!("join_btn_{:?}", info.id),
+            send_msg(ClientToLobby::JoinLobby(info.id)),
+        ))
+        .styled()
+        .column_gap(Val::Px(10.0))
+        .padding(UiRect::all(Val::Px(5.0)))
 }
