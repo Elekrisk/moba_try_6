@@ -12,18 +12,25 @@ use stylable::Stylable;
 use crate::ui::style::{Style, StyleLabel, StyleRef};
 
 pub mod button;
+pub mod container;
+pub mod custom;
+pub mod image;
 pub mod list;
+pub mod optional;
 pub mod scrollable;
 pub mod stylable;
 pub mod subtree;
 pub mod tabbed;
 pub mod text;
 pub mod tree;
-pub mod custom;
-pub mod optional;
 
 pub fn client(app: &mut App) {
-    app.add_plugins((tree::client, tabbed::client, button::client, scrollable::client));
+    app.add_plugins((
+        tree::client,
+        tabbed::client,
+        button::client,
+        scrollable::client,
+    ));
 }
 
 #[derive(Debug, Default)]
@@ -32,17 +39,17 @@ pub struct Pod {
     pub style_override: Style,
 }
 
-pub trait View: Any + Send + Sync {
+pub trait View: Debug + Any + Send + Sync {
     type Widget: Widget;
 
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget;
     fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, commands: Commands);
-    fn structure(&self) -> String {
+    fn name(&self) -> String {
         "???".into()
     }
 }
 
-pub trait ErasedView: Any + Send + Sync {
+pub trait ErasedView: Debug + Any + Send + Sync {
     fn build_erased(&mut self, parent: &mut ChildSpawnerCommands) -> BoxedWidget;
     fn rebuild_erased(
         &mut self,
@@ -77,10 +84,11 @@ where
     }
 
     fn structure_erased(&self) -> String {
-        format!("Erased({})", self.structure())
+        format!("Erased({})", self.name())
     }
 }
 
+#[derive(Debug)]
 pub struct BoxedView {
     pub inner: Box<dyn ErasedView>,
 }
@@ -136,7 +144,7 @@ impl View for BoxedView {
         }
     }
 
-    fn structure(&self) -> String {
+    fn name(&self) -> String {
         format!("Boxed({})", self.inner.structure_erased())
     }
 }
@@ -145,15 +153,10 @@ impl View for () {
     type Widget = (Entity, Entity);
 
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
-        (
-            parent.spawn_empty().id(),
-            parent.target_entity()
-        )
+        (parent.spawn_empty().id(), parent.target_entity())
     }
 
-    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, commands: Commands) {
-        
-    }
+    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, commands: Commands) {}
 }
 
 pub trait Widget: Any + Send + Sync {

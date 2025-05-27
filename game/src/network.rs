@@ -77,16 +77,20 @@ async fn connect(
 ) -> anyhow::Result<()> {
     match inner::connect(address).await {
         Ok(connection) => {
+            info!("Sending application handshake...");
             connection
                 .send(ClientToLobby::Handshake {
                     name: whoami::username(),
                 })
                 .await
                 .unwrap();
+            info!("Application handshake sent");
+            info!("Waiting for hanshake response...");
             let LobbyToClient::Handshake { id } = connection.recv::<LobbyToClient>().await.unwrap()
             else {
                 bail!("Invalid handshake");
             };
+            info!("Handshake response received");
             info!("My id: {id:?}");
             send_internal.send(LobbyMessage::LobbyConnected(id))?;
 
@@ -165,7 +169,7 @@ pub enum LobbyMessage {
 pub struct Sess<S: Session>(pub Arc<S>);
 
 impl<S: Session> Sess<S> {
-    async fn send<T: Serialize>(&self, msg: T) -> anyhow::Result<()> {
+    pub async fn send<T: Serialize>(&self, msg: T) -> anyhow::Result<()> {
         let msg = serde_json::to_vec_pretty(&msg)?;
         let mut stream = self
             .open_uni()
@@ -186,7 +190,7 @@ impl<S: Session> Sess<S> {
         Ok(())
     }
 
-    async fn recv<T: for<'de> Deserialize<'de>>(&self) -> anyhow::Result<T> {
+    pub async fn recv<T: for<'de> Deserialize<'de>>(&self) -> anyhow::Result<T> {
         let mut stream = self
             .accept_uni()
             .await

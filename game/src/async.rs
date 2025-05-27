@@ -52,7 +52,7 @@ impl AsyncContext {
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn client(app: &mut App) {
+pub fn common(app: &mut App) {
     app.insert_resource(AsyncContext {
         runtime: Arc::new(Runtime::new().unwrap()),
     });

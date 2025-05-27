@@ -12,6 +12,7 @@ use crate::{
     new_ui::{
         View, ViewExt,
         button::ButtonView,
+        container::ContainerView,
         list::ListView,
         subtree::SubtreeView,
         tabbed::TabbedView,
@@ -80,12 +81,14 @@ fn ui_root2() -> Option<impl View> {
         TabbedView::new()
             .with(
                 "Lobbies",
-                SubtreeView::new("lobby_anchor", lobby_anchor2)
-                    .styled()
-                    .width(Val::Percent(100.0))
-                    .height(Val::Percent(100.0))
-                    .flex_basis(Val::Px(0.0))
-                    .flex_grow(1.0),
+                ContainerView::new(
+                    SubtreeView::new("lobby_anchor", lobby_anchor2)
+                        .styled()
+                        .width(Val::Percent(100.0)),
+                )
+                .styled()
+                .width(Val::Percent(100.0))
+                .flex_grow(1.0),
             )
             .with("Reference", TextView::new("Waow, reference :D"))
             .with("Settings", TextView::new("Waow, settings :D"))
@@ -121,7 +124,10 @@ fn lobby_anchor2(state: Res<State<ConnectionState>>) -> Option<impl View + use<>
         ConnectionState::NotConnected => lobby_connection_screen2().boxed(),
         ConnectionState::Connecting => connecting_screen2().boxed(),
         ConnectionState::ConnectionFailed => {
-            SubtreeView::new("error_screen", OnceRunner::new(connection_error_screen2)).boxed()
+            SubtreeView::new("error_screen", OnceRunner::new(connection_error_screen2))
+                .styled()
+                .width(Val::Percent(100.0))
+                .boxed()
         }
         ConnectionState::Connected => {
             SubtreeView::new("lobby_connected_view", connected_to_lobby_server)
@@ -181,7 +187,7 @@ fn lobby_connection_screen() -> impl Bundle {
             ..default()
         },
         children![
-            text("Connect to localhost?"),
+            text("Connect to elekrisk.com?"),
             button2("Connect", set_state(ConnectionState::Connecting)),
         ],
     )

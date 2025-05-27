@@ -1,5 +1,5 @@
-use bevy::ecs::query::QueryData;
 pub use bevy::prelude::*;
+use bevy::{ecs::query::QueryData, ui::experimental::GhostNode};
 
 use super::{
     View, Widget,
@@ -9,6 +9,15 @@ use super::{
 pub struct SubtreeView<F: UiFunc> {
     label: String,
     subtree: Option<F>,
+}
+
+impl<F: UiFunc> std::fmt::Debug for SubtreeView<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SubtreeView")
+            .field("label", &self.label)
+            .field_with("subtree", |fmt| fmt.write_str("Opaque"))
+            .finish()
+    }
 }
 
 impl<F: UiFunc> SubtreeView<F> {
@@ -48,8 +57,11 @@ impl<F: UiFunc> View for SubtreeView<F> {
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
         let e = parent
             .spawn((
+                Node::default(),
                 UiTree::new(self.subtree.take().unwrap()),
-                Name::new(format!("UiTree ({})", self.label)),
+                Name::new(self.name()),
+                // GhostNode,
+                Children::default(),
             ))
             .id();
 
@@ -64,9 +76,16 @@ impl<F: UiFunc> View for SubtreeView<F> {
             commands
                 .entity(widget.entity())
                 .despawn_related::<Children>()
-                .insert((UiTree::new(self.subtree.take().unwrap()), 
-                Name::new(format!("UiTree ({})", self.label)),));
+                .insert((
+                    UiTree::new(self.subtree.take().unwrap()),
+                    Name::new(self.name()),
+                    Children::default(),
+                ));
         }
+    }
+
+    fn name(&self) -> String {
+        format!("UiTree ({})", self.label)
     }
 }
 

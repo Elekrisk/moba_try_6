@@ -1,4 +1,5 @@
 use crate::network::Sess;
+use bevy::prelude::info;
 use std::sync::Arc;
 use xwt_core::endpoint::Connect;
 use xwt_core::endpoint::connect::Connecting;
@@ -12,13 +13,14 @@ pub fn create_endpoint() -> Endpoint {
 
 pub async fn connect(address: String) -> anyhow::Result<Sess<xwt_web::Session>> {
     let endpoint = create_endpoint();
+    info!("Connecting step 1...");
     let session = endpoint
         .connect(&format!("https://{address}"))
         .await
-        .handle_err()?
-        .wait_connect()
-        .await
         .handle_err()?;
+    info!("Connecting step 2...");
+    let session = session.wait_connect().await.handle_err()?;
+    info!("Connected");
 
     Ok(Sess(Arc::new(session)))
 }

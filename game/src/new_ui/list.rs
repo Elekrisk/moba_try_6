@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use super::{BoxedView, BoxedWidget, ErasedView, Pod, View, Widget};
 
+#[derive(Debug)]
 pub struct ListView {
     pub items: Vec<BoxedView>,
 }
@@ -9,6 +10,12 @@ pub struct ListView {
 impl ListView {
     pub fn new() -> Self {
         Self { items: default() }
+    }
+
+    pub fn from_iter<V: ErasedView>(iter: impl IntoIterator<Item = V>) -> Self {
+        Self {
+            items: iter.into_iter().map(BoxedView::new).collect(),
+        }
     }
 
     pub fn with(mut self, item: impl ErasedView) -> Self {
@@ -29,7 +36,7 @@ impl View for ListView {
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
         let mut items = vec![];
         let id = parent
-            .spawn((Node { ..default() }, Name::new("List")))
+            .spawn((Node { ..default() }, Name::new(self.name())))
             .with_children(|parent| {
                 for item in &mut self.items {
                     items.push(item.build(parent));
@@ -55,6 +62,7 @@ impl View for ListView {
         }
 
         let mut entity = commands.entity(widget.entity);
+        entity.insert(Name::new(self.name()));
 
         if self.items.len() > prev.items.len() {
             entity.with_children(|parent| {
@@ -70,15 +78,8 @@ impl View for ListView {
         }
     }
 
-    fn structure(&self) -> String {
-        format!(
-            "List[{}]",
-            self.items
-                .iter()
-                .map(View::structure)
-                .intersperse(",".into())
-                .collect::<String>()
-        )
+    fn name(&self) -> String {
+        format!("List[{}]", self.items.len())
     }
 }
 

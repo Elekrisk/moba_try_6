@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use bevy::prelude::*;
 
 use super::{View, Widget};
@@ -8,6 +10,19 @@ pub struct CustomView<
 > {
     build: B,
     rebuild: R,
+}
+
+impl<
+    B: FnMut(&mut ChildSpawnerCommands) -> CustomWidget,
+    R: FnMut(&Self, &mut CustomWidget, Commands),
+> Debug for CustomView<B, R>
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CustomView")
+            .field_with("build", |fmt| fmt.write_str("Opaque"))
+            .field_with("rebuild", |fmt| fmt.write_str("Opaque"))
+            .finish()
+    }
 }
 
 impl<

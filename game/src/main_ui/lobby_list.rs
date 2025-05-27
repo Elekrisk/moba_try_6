@@ -8,18 +8,27 @@ use bevy::{
     },
     prelude::*,
 };
+use engine_common::ChampionId;
+use lightyear::prelude::ConnectToken;
 use lobby_common::{
     ClientToLobby, LobbyId, LobbyInfo, LobbyShortInfo, LobbyToClient, PlayerId, PlayerInfo, Team,
 };
 use tokio::sync::mpsc::error::TryRecvError;
 
 use crate::{
-    main_ui::ConnectionState, network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender}, new_ui::{
-        button::ButtonView, list::ListView, subtree::SubtreeView, text::TextView, tree::IfRunner, ErasedView, View, ViewExt
-    }, ui::{button::button2, scrollable, text::text, ObservedBy}, LobbyMode, Options
+    LobbyMode, Options,
+    main_ui::ConnectionState,
+    network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender},
+    new_ui::{
+        ErasedView, View, ViewExt, button::ButtonView, list::ListView, subtree::SubtreeView,
+        text::TextView, tree::IfRunner,
+    },
+    ui::{ObservedBy, button::button2, scrollable, text::text},
 };
 
-use super::{in_champ_select::champ_select2, in_lobby::lobby_ui2, send_msg, LobbyAnchor, LobbyMenuState};
+use super::{
+    LobbyAnchor, LobbyMenuState, in_champ_select::champ_select2, in_lobby::lobby_ui2, send_msg,
+};
 
 pub fn client(app: &mut App) {
     app.add_systems(Update, listen_to_lobby_server)
@@ -38,7 +47,8 @@ events! {
     LobbyConnected;
     GoToChampSelect;
     ReturnFromChampSelect;
-    PlayerSelectedChamp(pub PlayerId, pub String);
+    PlayerSelectedChamp(pub PlayerId, pub ChampionId);
+    PlayerLockedSelection(pub PlayerId);
 }
 
 // #[derive(Event)]
@@ -149,6 +159,13 @@ fn listen_to_lobby_server(
                 LobbyToClient::PlayerSelectedChamp(player_id, champ) => {
                     commands.trigger(PlayerSelectedChamp(player_id, champ));
                 }
+                LobbyToClient::PlayerLockedSelection(player_id) => {
+                    commands.trigger(PlayerLockedSelection(player_id));
+                }
+                LobbyToClient::GameStarted(items) => {
+                    let token = ConnectToken::try_from_bytes(&items).unwrap();
+                    info!("Connect to server");
+                },
             },
         }
     }
@@ -243,9 +260,7 @@ fn populate_lobby_list(
     //     .despawn_related::<Children>()
     //     .with_child(lobby_list(&lobbies));
     // commands.insert_resource(LobbyList(lobbies.0));
-    commands.insert_resource(LobbyList(
-       lobbies.0
-    ));
+    commands.insert_resource(LobbyList(lobbies.0));
 }
 
 fn on_lobby_disconnect(trigger: Trigger<LobbyConnectionLost>, mut commands: Commands) {
@@ -255,7 +270,9 @@ fn on_lobby_disconnect(trigger: Trigger<LobbyConnectionLost>, mut commands: Comm
 #[derive(Resource)]
 struct LobbyList(Vec<LobbyShortInfo>);
 
-pub fn connected_to_lobby_server(lobby_state: Res<State<LobbyMenuState>>) -> Option<impl View + use<>> {
+pub fn connected_to_lobby_server(
+    lobby_state: Res<State<LobbyMenuState>>,
+) -> Option<impl View + use<>> {
     if !lobby_state.is_changed() {
         return None;
     }
@@ -269,20 +286,34 @@ pub fn connected_to_lobby_server(lobby_state: Res<State<LobbyMenuState>>) -> Opt
 
 pub fn lobby_list2() -> impl View {
     ListView::new()
-    .with(ListView::new()
-        .with(ButtonView::new(TextView::new("Create Lobby"), "create lobby", send_msg(ClientToLobby::CreateAndJoinLobby)))
-        .with(ButtonView::new(TextView::new("Refresh"), "refresh", send_msg(ClientToLobby::FetchLobbyList)))
-    ).with(
-        SubtreeView::new(
-            "lobby_list",
-            IfRunner::new(lobby_list3, |world| world.contains_resource::<LobbyList>()),
-        ).styled().height(Val::Px(0.0)).flex_grow(1.0).flex_basis(Val::Px(0.0))
-    )
-    .styled()
-    .width(Val::Percent(100.0))
-    .height(Val::Percent(100.0))
-    .flex_direction(FlexDirection::Column)
-    .flex_grow(1.0)
+        .with(
+            ListView::new()
+                .with(ButtonView::new(
+                    TextView::new("Create Lobby"),
+                    "create lobby",
+                    send_msg(ClientToLobby::CreateAndJoinLobby),
+                ))
+                .with(ButtonView::new(
+                    TextView::new("Refresh"),
+                    "refresh",
+                    send_msg(ClientToLobby::FetchLobbyList),
+                )),
+        )
+        .with(
+            SubtreeView::new(
+                "lobby_list",
+                IfRunner::new(lobby_list3, |world| world.contains_resource::<LobbyList>()),
+            )
+            .styled()
+            .width(Val::Percent(100.0)), // .height(Val::Px(0.0))
+                                         // .flex_grow(1.0)
+                                         // .flex_basis(Val::Px(0.0)),
+        )
+        .styled()
+        .width(Val::Percent(100.0))
+        .height(Val::Percent(100.0))
+        .flex_direction(FlexDirection::Column)
+        .flex_grow(1.0)
 }
 
 fn lobby_list3(list: Res<LobbyList>) -> Option<impl View + use<>> {

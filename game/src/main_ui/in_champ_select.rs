@@ -1,12 +1,21 @@
-use bevy::{ecs::spawn::SpawnIter, prelude::*};
-use lobby_common::{ClientToLobby, PlayerId, Team};
+use bevy::{asset::uuid::Uuid, ecs::spawn::SpawnIter, prelude::*};
+use engine_common::{ChampionDef, ChampionId};
+use lobby_common::{ClientToLobby, LobbyInfo, PlayerId, Team};
 
-use crate::{new_ui::View, ui::text::text, LobbySender};
+use crate::{
+    ChampDefs, LobbySender,
+    new_ui::{
+        View, ViewExt, button::ButtonView, image::ImageView, list::ListView, stylable::Stylable,
+        subtree::SubtreeView, tree::UiFunc,
+    },
+    ui::text::text,
+};
 
 use super::{
     LobbyAnchor, LobbyMenuState,
-    in_lobby::CurrentLobbyInfo,
+    in_lobby::{CurrentLobbyInfo, PlayerInfoCache},
     lobby_list::{GoToChampSelect, ReturnFromChampSelect},
+    send_msg,
 };
 
 pub fn client(app: &mut App) {
@@ -15,87 +24,8 @@ pub fn client(app: &mut App) {
         .add_observer(on_return_from_champ_select);
 }
 
-fn setup_ui(
-    anchor: Single<Entity, With<LobbyAnchor>>,
-    info: Res<CurrentLobbyInfo>,
-    sender: Res<LobbySender>,
-    mut commands: Commands,
-) {
-    commands.entity(*anchor).with_child(champ_select(&info));
-    // _ = sender.send(ClientToLobby::GetLobbyInfo(info.0.short.id));
-}
-
-fn champ_select(info: &CurrentLobbyInfo) -> impl Bundle {
-    let even_teams = info
-        .0
-        .teams
-        .chunks(2)
-        .enumerate()
-        .map(|(i, c)| (i * 2, c[0].clone()))
-        .collect::<Vec<_>>();
-    let odd_teams = info
-        .0
-        .teams
-        .chunks(2)
-        .enumerate()
-        .flat_map(|(i, c)| c.get(1).map(|p| (i * 2 + 1, p.clone())))
-        .collect::<Vec<_>>();
-
-    (
-        Node { ..default() },
-        children![
-            (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    flex_grow: 1.0,
-                    ..default()
-                },
-                Children::spawn(SpawnIter(
-                    even_teams.into_iter().map(|(t, p)| team_list(Team(t), p))
-                ))
-            ),
-            (
-                Node {
-                    flex_direction: FlexDirection::Column,
-                    flex_grow: 1.0,
-                    ..default()
-                },
-                Children::spawn(SpawnIter(
-                    odd_teams.into_iter().map(|(t, p)| team_list(Team(t), p))
-                ))
-            ),
-        ],
-    )
-}
-
-fn team_list(team: Team, players: Vec<PlayerId>) -> impl Bundle {
-    (
-        Node {
-            flex_direction: FlexDirection::Column,
-            ..default()
-        },
-        children![text(format!("Team {}", team.0)), player_list(players),],
-    )
-}
-
-fn player_list(players: Vec<PlayerId>) -> impl Bundle {
-    (
-        Node {
-            flex_direction: FlexDirection::Column,
-            ..default()
-        },
-        Children::spawn(SpawnIter(players.into_iter().map(player_entry))),
-    )
-}
-
-fn player_entry(player: PlayerId) -> impl Bundle {
-    (
-        Node {
-            flex_direction: FlexDirection::Row,
-            ..default()
-        },
-        children![text("Unknown")],
-    )
+fn setup_ui(info: Res<CurrentLobbyInfo>, sender: Res<LobbySender>) {
+    _ = sender.send(ClientToLobby::GetLobbyInfo(info.0.short.id));
 }
 
 fn on_goto_champ_select(trigger: Trigger<GoToChampSelect>, mut commands: Commands) {
@@ -107,5 +37,221 @@ fn on_return_from_champ_select(trigger: Trigger<ReturnFromChampSelect>, mut comm
 }
 
 pub fn champ_select2() -> impl View {
-    
+    SubtreeView::new("champ select", champ_select3)
+        .styled()
+        .width(Val::Percent(100.0))
+}
+
+fn champ_select3(lobby: Res<CurrentLobbyInfo>) -> Option<impl View + use<>> {
+    if !lobby.is_changed() {
+        return None;
+    }
+
+    let lobby = &lobby.0;
+
+    let team_pairs = lobby.teams.chunks(2).enumerate().map(|(i, slice)| {
+        slice
+            .iter()
+            .enumerate()
+            .map(move |(j, p)| (Team(i * 2 + j), p))
+    });
+
+    let mut team_list = ListView::new();
+
+    for pair in team_pairs {
+        team_list.add(team_pair(pair, lobby));
+    }
+
+    let middle = ListView::new()
+        .with(
+            SubtreeView::new("champ_select_buttons", champ_select_buttons)
+                .styled()
+                .width(Val::Percent(100.0))
+                .scrollable(),
+        )
+        .with(ButtonView::new("Lock", "lock_selection", send_msg(ClientToLobby::LockSelection)))
+        .styled()
+        .width(Val::Percent(34.0))
+        .position_type(PositionType::Absolute)
+        .flex_direction(FlexDirection::Column)
+        .align_items(AlignItems::Center)
+        .height(Val::Percent(100.0));
+
+    let container = ListView::new()
+        .with(
+            team_list
+                .styled()
+                .flex_direction(FlexDirection::Column)
+                .width(Val::Percent(100.0))
+                .flex_grow(1.0)
+                .flex_basis(Val::Px(0.0))
+                .scrollable(),
+        )
+        .with(middle);
+
+    Some(
+        container
+            .styled()
+            .width(Val::Percent(100.0))
+            .flex_direction(FlexDirection::Column)
+            .align_items(AlignItems::Center),
+    )
+}
+
+fn team_pair(
+    mut pair: impl Iterator<Item = (Team, &Vec<PlayerId>)>,
+    lobby: &LobbyInfo,
+) -> impl View {
+    let (left_team, left_players) = pair.next().unwrap();
+
+    let mut list = ListView::new().with(team(left_team, left_players, lobby));
+    if let Some((right_team, right_players)) = pair.next() {
+        list.add(team(right_team, right_players, lobby));
+    }
+
+    list.styled()
+        .flex_direction(FlexDirection::Row)
+        .justify_content(JustifyContent::SpaceBetween)
+}
+
+fn team(team: Team, players: &Vec<PlayerId>, lobby: &LobbyInfo) -> impl View {
+    ListView::from_iter(
+        players
+            .iter()
+            .copied()
+            .chain(std::iter::repeat(PlayerId::new()))
+            .take(5)
+            .map(|p| player_slot(team, p, lobby)),
+    )
+    .styled()
+    .flex_direction(FlexDirection::Column)
+    .width(Val::Percent(33.0))
+}
+
+fn player_slot(team: Team, player: PlayerId, lobby: &LobbyInfo) -> impl View {
+    player_slot_2(team, player)
+}
+
+fn player_slot_2(team: Team, player: PlayerId) -> SubtreeView<impl UiFunc> {
+    let switch = team.0 % 2 == 1;
+    SubtreeView::new(
+        format!("player_slot_{}", player.0),
+        move |lobby: Res<CurrentLobbyInfo>,
+              mut cache: ResMut<PlayerInfoCache>,
+              champs: Res<ChampDefs>,
+              sender: Res<LobbySender>,
+              time: Res<Time>| {
+            if !lobby.is_changed() && !cache.is_changed() && !champs.is_changed() {
+                return None;
+            }
+
+            let Some(player_info) = cache.fetch(player, &sender, &time) else {
+                return Some("what".boxed());
+            };
+
+            let mut list = ListView::new()
+                .with(player_info.name.clone())
+                .with(
+                    lobby
+                        .0
+                        .selected_champs
+                        .get(&player)
+                        .map(|c| champs.map.get(&c.id).map(|n| (n, c.locked)))
+                        .flatten()
+                        .map(|(def, locked)| {
+                            if locked {
+                                format!("[{}]", def.name)
+                            } else {
+                                def.name.clone()
+                            }
+                        }),
+                )
+                .styled()
+                .justify_content(JustifyContent::SpaceBetween)
+                .flex_grow(1.0);
+            if switch {
+                list = list.flex_direction(FlexDirection::RowReverse);
+            }
+            Some(list.boxed())
+        },
+    )
+}
+
+// fn champ_select_list() -> Stylable<impl View> {
+//     let mut list = ListView::new();
+
+//     let champs = (0..100).map(|i| format!("Champ {i}")).collect::<Vec<_>>();
+
+//     for champ in champs {
+//         let label = format!("champ_select_{champ}");
+//         list.add(
+//             ButtonView::new(
+//                 champ.clone(),
+//                 label,
+//                 send_msg(ClientToLobby::SelectChamp(champ)),
+//             )
+//             .styled()
+//             .width(Val::Px(100.0))
+//             .height(Val::Px(100.0)),
+//         );
+//     }
+
+//     list.styled()
+//         .flex_wrap(FlexWrap::Wrap)
+//         .justify_content(JustifyContent::Center)
+//         .row_gap(Val::Px(10.0))
+//         .column_gap(Val::Px(10.0))
+// }
+
+fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
+    if !res.is_changed() {
+        return None;
+    }
+
+    info!("{:#?}", res);
+
+    let mut list = ListView::new();
+
+    let def = ChampionDef {
+        id: ChampionId(Uuid::new_v4()),
+        name: "zzzWEEEE".into(),
+        icon: "hallabalou".into(),
+    };
+
+    let mut champs = res
+        .map
+        .values()
+        .chain(std::iter::repeat(&def))
+        .take(100)
+        .collect::<Vec<_>>();
+    champs.sort_by_key(|c| &c.name);
+
+    for champ in champs {
+        let label = format!("champ_select_{}", champ.id.0);
+
+        let button = ButtonView::new(
+            ListView::new()
+                .with(
+                    ImageView::new(&champ.icon)
+                        .styled()
+                        .width(Val::Px(100.0))
+                        .height(Val::Px(100.0)),
+                )
+                .with(champ.name.clone().styled().max_width(Val::Px(100.0)))
+                .styled()
+                .flex_direction(FlexDirection::Column),
+            label,
+            send_msg(ClientToLobby::SelectChamp(champ.id)),
+        );
+
+        list.add(button);
+    }
+
+    Some(
+        list.styled()
+            .flex_wrap(FlexWrap::Wrap)
+            .justify_content(JustifyContent::Center)
+            .row_gap(Val::Px(10.0))
+            .column_gap(Val::Px(10.0)),
+    )
 }

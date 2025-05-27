@@ -41,6 +41,7 @@ fn setup_styles(mut styles: ResMut<Styles>) {
     style.background_color = Some(Color::srgb(0.2, 0.2, 0.2));
 }
 
+#[derive(Debug)]
 pub struct TabbedView {
     pub tabs: Stylable<ListView>,
     pub pages: Stylable<ListView>,
@@ -158,6 +159,10 @@ impl View for TabbedView {
                     entity.insert(CurrentTab(max_index));
                 }
             });
+    }
+
+    fn name(&self) -> String {
+        format!("Tabbed[{}]", self.tabs.inner.items.len())
     }
 }
 

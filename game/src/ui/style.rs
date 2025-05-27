@@ -7,8 +7,10 @@ use bevy::{
 };
 
 pub fn client(app: &mut App) {
-    app.insert_resource(Styles::new_with_default())
-        .add_systems(PostUpdate, (update_conditional_style, update_with_style2).chain());
+    app.insert_resource(Styles::new_with_default()).add_systems(
+        PostUpdate,
+        (update_conditional_style, update_with_style2).chain(),
+    );
 }
 
 // #[derive(Resource)]
@@ -253,7 +255,9 @@ pub struct ConditionalStyle {
 
 impl Clone for ConditionalStyle {
     fn clone(&self) -> Self {
-        Self { x: self.x.iter().map(|x| x.boxed_clone()).collect() }
+        Self {
+            x: self.x.iter().map(|x| x.boxed_clone()).collect(),
+        }
     }
 }
 
@@ -286,18 +290,17 @@ impl<F: Fn(EntityRef) -> Option<StyleRef> + Send + Sync + 'static + Clone> Style
     fn extract(&self, entity: EntityRef) -> Option<StyleRef> {
         self(entity)
     }
-    
+
     fn boxed_clone(&self) -> Box<dyn StyleExtractor> {
         Box::new(self.clone())
     }
-    
 }
 
 impl<C: StyleCondition> StyleExtractor for (C, StyleRef) {
     fn extract(&self, entity: EntityRef) -> Option<StyleRef> {
         self.0.test(entity).then(|| self.1.clone())
     }
-    
+
     fn boxed_clone(&self) -> Box<dyn StyleExtractor> {
         Box::new(self.clone())
     }
@@ -336,7 +339,9 @@ impl<C: Component> HasComponent<C> {
 
 impl<C: Component> Clone for HasComponent<C> {
     fn clone(&self) -> Self {
-        Self { _phantom: self._phantom.clone() }
+        Self {
+            _phantom: self._phantom.clone(),
+        }
     }
 }
 

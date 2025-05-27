@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use engine_common::ChampionId;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,7 +18,9 @@ pub enum LobbyToClient {
     PlayerChangedPositions(PlayerId, PlayerId),
     GoToChampSelect,
     ReturnFromChampSelect,
-    PlayerSelectedChamp(PlayerId, String),
+    PlayerSelectedChamp(PlayerId, ChampionId),
+    PlayerLockedSelection(PlayerId),
+    GameStarted(Vec<u8>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,7 +37,8 @@ pub enum ClientToLobby {
     SwitchPlayerPositions(PlayerId, PlayerId),
     KickPlayer(PlayerId),
     GoToChampSelect,
-    SelectChamp(String),
+    SelectChamp(ChampionId),
+    LockSelection,
     Disconnect,
 }
 
@@ -52,8 +56,21 @@ pub struct LobbyInfo {
     pub settings: LobbySettings,
     pub teams: Vec<Vec<PlayerId>>,
     pub leader: PlayerId,
-    pub in_champ_select: bool,
-    pub selected_champs: HashMap<PlayerId, String>,
+    pub lobby_state: LobbyState,
+    pub selected_champs: HashMap<PlayerId, ChampionSelection>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum LobbyState {
+    InLobby,
+    InChampSelect,
+    InGame,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChampionSelection {
+    pub id: ChampionId,
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,3 +107,31 @@ impl LobbyId {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PlayerId(pub Uuid);
+
+impl PlayerId {
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LobbyToServer {
+    Handshake {
+        settings: LobbySettings,
+        players: Vec<PlayerGameInfo>
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerToLobby {
+    PlayerTokens {
+        tokens: HashMap<PlayerId, Vec<u8>>
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerGameInfo {
+    pub id: PlayerId,
+    pub team: Team,
+    pub champ: ChampionId,
+}

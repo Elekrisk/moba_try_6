@@ -125,7 +125,6 @@ impl<F: UiFunc, C: Fn(&World) -> bool + Send + Sync + 'static> UiFunc for IfRunn
 }
 
 #[derive(Component)]
-#[require(Node)]
 pub struct UiTree {
     ui: Option<Box<dyn UiFunc>>,
     widget: Option<BoxedWidget>,
@@ -149,7 +148,10 @@ impl UiTree {
         }
     }
 
-    pub fn run_if<M>(f: impl IntoUiFunc<M>, cond: impl Fn(&World) -> bool + Send + Sync + 'static) -> Self {
+    pub fn run_if<M>(
+        f: impl IntoUiFunc<M>,
+        cond: impl Fn(&World) -> bool + Send + Sync + 'static,
+    ) -> Self {
         Self {
             ui: Some(Box::new(IfRunner::new(f, cond))),
             widget: None,

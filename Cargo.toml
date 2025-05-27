@@ -1,5 +1,5 @@
 [workspace]
-members = ["game", "lobby_common", "lobby_server"]
+members = [ "engine_common","game", "lobby_common", "lobby_server"]
 resolver = "3"
 
 # Enable a small amount of optimization in the dev profile.
@@ -21,3 +21,6 @@ codegen-units = 1
 # Do a second optimization pass over the entire program, including dependencies.
 # Slows compile times, marginal improvements.
 lto = "thin"
+
+[patch.crates-io]
+ring = { git = "https://github.com/briansmith/ring" }

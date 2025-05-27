@@ -6,7 +6,7 @@ impl<V: View> View for Option<V> {
     type Widget = OptionalWidget<V::Widget>;
 
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
-        let mut ghost = parent.spawn(GhostNode);
+        let mut ghost = parent.spawn((GhostNode, Name::new(self.name()), Children::default()));
         let mut inner_widget = None;
         if let Some(inner) = self {
             ghost.with_children(|parent| {
@@ -22,20 +22,35 @@ impl<V: View> View for Option<V> {
     }
 
     fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
+        let name = self.name();
         match (self, prev) {
             (None, None) => {}
             (None, Some(_)) => {
-                // widget.inner.as_mut().unwrap().despawn(commands);
+                widget.inner.as_mut().unwrap().despawn(commands);
                 widget.inner = None;
             }
             (Some(inner), None) => {
-                commands.entity(widget.entity).with_children(|parent| {
+                let mut entity = commands.entity(widget.entity);
+                entity.insert(Name::new(name));
+                entity.with_children(|parent| {
                     widget.inner = Some(inner.build(parent));
                 });
-            },
+            }
             (Some(inner), Some(prev_inner)) => {
-                inner.rebuild(prev_inner, widget.inner.as_mut().unwrap(), commands);
-            },
+                inner.rebuild(
+                    prev_inner,
+                    widget.inner.as_mut().unwrap(),
+                    commands.reborrow(),
+                );
+                commands.entity(widget.entity).insert(Name::new(name));
+            }
+        }
+    }
+
+    fn name(&self) -> String {
+        match self {
+            Some(inner) => format!("Optional ({})", inner.name()),
+            None => "Optional (None)".into(),
         }
     }
 }

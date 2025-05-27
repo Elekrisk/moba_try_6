@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use bevy::{
     ecs::system::{IntoObserverSystem, ObserverSystem, SystemId},
     prelude::*,
@@ -44,6 +46,19 @@ pub struct ButtonView<V: View, S: ObserverSystem<Pointer<Click>, ()>> {
     pub normal_style: StyleRef,
     pub hover_style: StyleRef,
     pub press_style: StyleRef,
+}
+
+impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> Debug for ButtonView<V, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ButtonView")
+            .field("inner", &self.inner)
+            .field("callback_label", &self.callback_label)
+            .field_with("on_click", |fmt| fmt.write_str("Opaque"))
+            .field("normal_style", &self.normal_style)
+            .field("hover_style", &self.hover_style)
+            .field("press_style", &self.press_style)
+            .finish()
+    }
 }
 
 impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> ButtonView<V, S> {
@@ -109,7 +124,7 @@ impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> View for ButtonView<V, S> {
                     .when(ComponentEquals(Interaction::None), DefaultButtonStyle)
                     .when(ComponentEquals(Interaction::Hovered), HoverButtonStyle)
                     .when(ComponentEquals(Interaction::Pressed), PressButtonStyle),
-                Name::new(format!("Button ({})", &self.callback_label)),
+                Name::new(self.name()),
             ))
             .with_children(|parent| {
                 inner = Some(self.inner.build(parent));
@@ -133,7 +148,7 @@ impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> View for ButtonView<V, S> {
         if self.callback_label != prev.callback_label {
             commands
                 .entity(widget.entity)
-                .insert(Name::new(format!("Button ({})", &self.callback_label)));
+                .insert(Name::new(self.name()));
             // Rebuild callback
             commands.entity(widget.observer).despawn();
             let on_click = self.on_click.take().unwrap();
@@ -141,6 +156,10 @@ impl<V: View, S: ObserverSystem<Pointer<Click>, ()>> View for ButtonView<V, S> {
                 .spawn(Observer::new(on_click).with_entity(widget.entity))
                 .id();
         }
+    }
+
+    fn name(&self) -> String {
+        format!("Button ({})", &self.callback_label)
     }
 }
 

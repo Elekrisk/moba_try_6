@@ -1,6 +1,6 @@
 #![feature(never_type)]
 
-use std::{borrow::Borrow, collections::HashMap};
+use std::{borrow::Borrow, collections::HashMap, path::PathBuf};
 
 use anyhow::{Result, anyhow, bail};
 use lobby_common::{
@@ -19,6 +19,14 @@ use wtransport::{
     endpoint::{IncomingSession, endpoint_side::Server},
 };
 
+#[derive(clap::Parser)]
+struct Options {
+    #[arg(long)]
+    certificate: Option<PathBuf>,
+    #[arg(long)]
+    privkey: Option<PathBuf>,
+}
+
 #[cfg(not(target_family = "wasm"))]
 enum InternalMessage {
     NewPlayer(Player),
@@ -27,6 +35,8 @@ enum InternalMessage {
         message: ClientToLobby,
     },
     PlayerDisconnected(PlayerId),
+    GameServerClosed(LobbyId),
+    GameTokenCreated(PlayerId, Vec<u8>),
 }
 
 #[cfg(target_family = "wasm")]
@@ -37,9 +47,26 @@ fn main() {
 #[cfg(not(target_family = "wasm"))]
 #[tokio::main]
 async fn main() {
-    use std::time::Duration;
+    use clap::Parser;
 
-    let identity = Identity::self_signed(["localhost", "127.0.0.1", "::1"]).unwrap();
+    let options = Options::parse();
+
+    let identity = match (options.certificate, options.privkey) {
+        (Some(cert_pemfile), Some(private_key_pemfile)) => {
+            println!("Using cert from disk");
+            Identity::load_pemfiles(cert_pemfile, private_key_pemfile)
+                .await
+                .unwrap()
+        }
+        (None, None) => {
+            println!("Using self-signed cert");
+            Identity::self_signed(["localhost", "127.0.0.1", "::1"]).unwrap()
+        }
+        _ => {
+            eprintln!("Specifying certificate or privkey also requires the other");
+            return;
+        }
+    };
 
     let config = ServerConfig::builder()
         .with_bind_default(54654)
@@ -50,7 +77,9 @@ async fn main() {
 
     let endpoint = Endpoint::server(config).unwrap();
 
-    let (s, mut r) = unbounded_channel();
+    let (sender, mut r) = unbounded_channel();
+
+    let s = sender.clone();
 
     tokio::spawn(async move {
         match server_loop(endpoint, s).await {
@@ -59,7 +88,7 @@ async fn main() {
         }
     });
 
-    let mut state = State::new();
+    let mut state = State::new(sender);
 
     loop {
         match state.handle(&mut r).await {
@@ -74,9 +103,13 @@ use wee::*;
 
 #[cfg(not(target_family = "wasm"))]
 mod wee {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, process::Command};
 
-    use lobby_common::LobbySettings;
+    use engine_common::ChampionId;
+    use lobby_common::{
+        ChampionSelection, LobbySettings, LobbyState, LobbyToServer, PlayerGameInfo, ServerToLobby,
+    };
+    use wtransport::ClientConfig;
 
     use super::*;
 
@@ -94,13 +127,21 @@ mod wee {
         incoming: IncomingSession,
         s: UnboundedSender<InternalMessage>,
     ) -> Result<()> {
-        let connection = incoming.await?.accept().await?;
+        println!("Incoming connection");
+        let connection = incoming.await?;
+        println!("Accepting connection...");
+        let connection = connection.accept().await?;
+        println!("Connection accepted");
+        println!("Waiting for application  handshake...");
         match connection.recv::<ClientToLobby>().await {
             Ok(ClientToLobby::Handshake { name }) => {
+                println!("Application handshake received");
                 let player_id = PlayerId(Uuid::new_v4());
+                println!("Sending handshake response...");
                 connection
                     .send(LobbyToClient::Handshake { id: player_id })
                     .await?;
+                println!("Handshake response sent");
                 let player = Player {
                     id: player_id,
                     name,
@@ -164,8 +205,8 @@ mod wee {
         pub settings: LobbySettings,
         pub teams: Vec<Vec<PlayerId>>,
         pub leader: PlayerId,
-        pub in_champ_select: bool,
-        pub selected_champs: HashMap<PlayerId, String>,
+        pub lobby_state: LobbyState,
+        pub selected_champs: HashMap<PlayerId, ChampionSelection>,
     }
 
     impl Lobby {
@@ -192,7 +233,7 @@ mod wee {
                 settings: self.settings.clone(),
                 teams: self.teams.clone(),
                 leader: self.leader,
-                in_champ_select: self.in_champ_select,
+                lobby_state: self.lobby_state,
                 selected_champs: self.selected_champs.clone(),
             }
         }
@@ -223,7 +264,9 @@ mod wee {
                         }
                         // We could not find a team with space, just find the one with
                         // the least amount of players
-                        if let Some(team_to_move_to) = teams.iter().min_by_key(|t| self.teams[t.0].len()) {
+                        if let Some(team_to_move_to) =
+                            teams.iter().min_by_key(|t| self.teams[t.0].len())
+                        {
                             let player = self.teams[from_team.0].pop().unwrap();
                             self.teams[team_to_move_to.0].push(player);
                         } else {
@@ -300,14 +343,16 @@ mod wee {
         players: HashMap<PlayerId, Player>,
         used_player_names: HashSet<String>,
         lobbies: HashMap<LobbyId, Lobby>,
+        sender: UnboundedSender<InternalMessage>,
     }
 
     impl State {
-        pub fn new() -> Self {
+        pub fn new(sender: UnboundedSender<InternalMessage>) -> Self {
             Self {
                 players: HashMap::new(),
                 used_player_names: HashSet::new(),
                 lobbies: HashMap::new(),
+                sender,
             }
         }
 
@@ -341,6 +386,20 @@ mod wee {
                 InternalMessage::PlayerMessage { player, message } => {
                     self.handle_player_message(player, message).await?;
                 }
+                InternalMessage::GameServerClosed(lobby_id) => {
+                    if let Some(lobby) = self.lobbies.get_mut(&lobby_id) {
+                        lobby.lobby_state = LobbyState::InLobby;
+                        lobby.selected_champs.clear();
+                        _ = self.broadcast_message(
+                            lobby_id,
+                            None,
+                            LobbyToClient::ReturnFromChampSelect,
+                        );
+                    }
+                }
+                InternalMessage::GameTokenCreated(player_id, token) => {
+                    _ = self.send_message(player_id, LobbyToClient::GameStarted(token));
+                },
             }
 
             Ok(())
@@ -382,7 +441,7 @@ mod wee {
                         },
                         teams: [vec![player_id], vec![]].into_iter().collect(),
                         leader: player_id,
-                        in_champ_select: false,
+                        lobby_state: LobbyState::InLobby,
                         selected_champs: HashMap::new(),
                     };
 
@@ -415,8 +474,8 @@ mod wee {
                         bail!("Lobby is full");
                     }
 
-                    if lobby.in_champ_select {
-                        bail!("Lobby is in champ select");
+                    if lobby.lobby_state != LobbyState::InLobby {
+                        bail!("Lobby is in champ select or in game");
                     }
 
                     // Add player to lobby
@@ -463,7 +522,8 @@ mod wee {
                         bail!("Player is not lobby leader");
                     }
                     lobby_settings.team_count = lobby_settings.team_count.max(1);
-                    lobby_settings.max_players_per_team = lobby_settings.max_players_per_team.max(1);
+                    lobby_settings.max_players_per_team =
+                        lobby_settings.max_players_per_team.max(1);
                     lobby.settings = lobby_settings;
                     lobby.readjust_if_needed();
                     let info = lobby.get_info();
@@ -582,7 +642,7 @@ mod wee {
                         bail!("Player is not lobby leader");
                     }
 
-                    lobby.in_champ_select = true;
+                    lobby.lobby_state = LobbyState::InChampSelect;
 
                     _ = self.broadcast_message(lobby_id, None, LobbyToClient::GoToChampSelect);
                 }
@@ -596,13 +656,54 @@ mod wee {
                     let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
                         bail!("Lobby doesn't exist");
                     };
+                    let entry =
+                        lobby
+                            .selected_champs
+                            .entry(player_id)
+                            .or_insert(ChampionSelection {
+                                id: ChampionId(Uuid::nil()),
+                                locked: false,
+                            });
+                    if entry.locked {
+                        bail!("Cannot change locked selection");
+                    }
 
-                    lobby.selected_champs.insert(player_id, champ.clone());
+                    entry.id = champ;
 
                     _ = self.broadcast_message(
                         lobby_id,
                         None,
                         LobbyToClient::PlayerSelectedChamp(player_id, champ),
+                    );
+                }
+                ClientToLobby::LockSelection => {
+                    let Some(player) = self.players.get(&player_id) else {
+                        bail!("Player doesn't exist");
+                    };
+                    let Some(lobby_id) = player.current_lobby else {
+                        bail!("Player is not in a lobby");
+                    };
+                    let Some(lobby) = self.lobbies.get_mut(&lobby_id) else {
+                        bail!("Lobby doesn't exist");
+                    };
+                    let Some(selection) = lobby.selected_champs.get_mut(&player_id) else {
+                        bail!("Cannot lock non-existant selection");
+                    };
+                    if selection.locked {
+                        bail!("Cannot lock locked selection");
+                    }
+
+                    selection.locked = true;
+
+                    if lobby.selected_champs.len() == lobby.player_count()
+                        && lobby.selected_champs.values().all(|s| s.locked)
+                    {
+                        self.start_game(lobby_id)?;
+                    }
+                    _ = self.broadcast_message(
+                        lobby_id,
+                        None,
+                        LobbyToClient::PlayerLockedSelection(player_id),
                     );
                 }
             }
@@ -625,9 +726,9 @@ mod wee {
             lobby.remove_player(player_id, false);
             player.current_lobby = None;
 
-            let in_champ_select = lobby.in_champ_select;
+            let in_champ_select = lobby.lobby_state == LobbyState::InChampSelect;
             if in_champ_select {
-                lobby.in_champ_select = false;
+                lobby.lobby_state = LobbyState::InLobby;
                 lobby.selected_champs.clear();
             }
 
@@ -690,6 +791,84 @@ mod wee {
 
                 let _ = self.send_message(player, message.clone());
             }
+
+            Ok(())
+        }
+
+        fn start_game(&mut self, lobby_id: LobbyId) -> Result<()> {
+            let lobby = self
+                .lobbies
+                .get_mut(&lobby_id)
+                .ok_or(anyhow!("No such lobby"))?;
+            if lobby.selected_champs.len() < lobby.player_count() {
+                bail!("Not all players have selected a champion");
+            }
+
+            if lobby.selected_champs.values().any(|s| !s.locked) {
+                bail!("Not all players have locked their selection");
+            }
+
+            println!("Starting game server...");
+            // Start game in some way
+            let mut child = Command::new("cargo")
+                .args(["run", "--bin=server", "--verbose", "54655"])
+                .spawn()?;
+
+            lobby.lobby_state = LobbyState::InGame;
+
+            let sender = self.sender.clone();
+
+            tokio::spawn(async move {
+                _ = child.wait();
+
+                println!("Child just exited!");
+
+                _ = sender.send(InternalMessage::GameServerClosed(lobby_id));
+            });
+
+            let settings = lobby.settings.clone();
+            let lobby = &*lobby;
+            let players = lobby
+                .teams
+                .iter()
+                .enumerate()
+                .flat_map(|(i, p)| {
+                    p.iter().map(move |p| PlayerGameInfo {
+                        id: *p,
+                        team: Team(i),
+                        champ: lobby.selected_champs.get(p).unwrap().id,
+                    })
+                })
+                .collect();
+
+            let sender = self.sender.clone();
+
+            tokio::spawn(async move {
+                // Connect to server
+                let conn = Endpoint::client(
+                    ClientConfig::builder()
+                        .with_bind_default()
+                        .with_no_cert_validation()
+                        .build(),
+                )
+                .unwrap()
+                .connect("https://localhost:54655")
+                .await
+                .unwrap();
+                conn.send(LobbyToServer::Handshake { settings, players })
+                    .await
+                    .unwrap();
+                let ServerToLobby::PlayerTokens { tokens } = conn.recv().await.unwrap();
+
+                for (player, token) in tokens {
+                    sender
+                        .send(InternalMessage::GameTokenCreated(
+                            player,
+                            token,
+                        ))
+                        .unwrap();
+                }
+            });
 
             Ok(())
         }

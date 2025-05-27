@@ -12,6 +12,17 @@ pub struct Stylable<V: View> {
     pub inner: V,
 }
 
+impl<V: View + std::fmt::Debug> std::fmt::Debug for Stylable<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Stylable")
+            .field("style_ref", &self.style_ref)
+            .field("style_override", &self.style_override)
+            // .field("conditional", &self.conditional)
+            .field("inner", &self.inner)
+            .finish()
+    }
+}
+
 impl<V: View> Stylable<V> {
     pub fn new(inner: V) -> Self {
         Self {
@@ -157,6 +168,9 @@ impl<V: View> View for Stylable<V> {
         if self.style_override != prev.style_override {
             entity.insert(self.style_override.clone());
         }
+    }
+    fn name(&self) -> String {
+        format!("{} S", self.inner.name())
     }
 }
 

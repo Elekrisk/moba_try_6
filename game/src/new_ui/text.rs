@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use super::{Pod, View, Widget};
 use bevy::prelude::*;
 
@@ -12,7 +14,7 @@ impl TextView {
     }
 }
 
-pub trait TextViewable: Send + Sync + 'static {
+pub trait TextViewable: Debug + Send + Sync + 'static {
     fn text(&self) -> &str;
 }
 
@@ -38,18 +40,8 @@ impl<T: TextViewable> View for T {
     type Widget = TextWidget;
 
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
-        let mut short_slice_end = self.text().len().min(16);
-        while !self.text().is_char_boundary(short_slice_end) {
-            short_slice_end += 1;
-        }
-
-        let slice = self.text().get(0..short_slice_end).unwrap();
-
         let entity = parent
-            .spawn((
-                Text::new(self.text()),
-                Name::new(format!("Text ({})", slice)),
-            ))
+            .spawn((Text::new(self.text()), Name::new(self.name())))
             .id();
         TextWidget {
             entity,
@@ -59,24 +51,24 @@ impl<T: TextViewable> View for T {
 
     fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, mut commands: Commands) {
         if self.text() != prev.text() {
-            let mut short_slice_end = self.text().len().min(16);
-            while !self.text().is_char_boundary(short_slice_end) {
-                short_slice_end += 1;
-            }
-
-            let slice = self.text().get(0..short_slice_end).unwrap();
             let txt = self.text().to_string();
             commands
                 .entity(widget.entity())
-                .insert(Name::new(format!("Text ({})", slice)))
+                .insert(Name::new(self.name()))
                 .entry::<Text>()
                 .or_default()
                 .and_modify(|mut text| text.0 = txt);
         }
     }
 
-    fn structure(&self) -> String {
-        "TextView".into()
+    fn name(&self) -> String {
+        let mut short_slice_end = self.text().len().min(16);
+        while !self.text().is_char_boundary(short_slice_end) {
+            short_slice_end += 1;
+        }
+
+        let slice = self.text().get(0..short_slice_end).unwrap();
+        format!("Text ({})", slice)
     }
 }
 

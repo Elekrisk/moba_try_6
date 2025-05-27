@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use bevy::{
     ecs::{
         relationship::RelatedSpawner,
@@ -13,22 +15,15 @@ use player_slot::{PlayerMovedFromThisSlot, PlayerMovedToThisSlot, PlayerSlotMap}
 use crate::{
     network::LobbySender,
     new_ui::{
-        View, ViewExt,
-        button::{ButtonCallback, ButtonView},
-        list::ListView,
-        subtree::SubtreeView,
-        text::TextView,
+        button::{ButtonCallback, ButtonView}, container::ContainerView, list::ListView, subtree::SubtreeView, text::TextView, View, ViewExt
     },
-    ui::{GlobalObserver, ObservedBy, button::button2, scrollable, text::text},
+    ui::{button::button2, scrollable, text::text, GlobalObserver, ObservedBy}, Options,
 };
 
 use super::{
-    LobbyAnchor, LobbyMenuState,
     lobby_list::{
-        LobbyInfoReceived, MyPlayerId, PlayerChangedPositions, PlayerChangedTeam,
-        PlayerInfoReceived, PlayerJoinedLobby, PlayerLeftLobby, WeJoinedLobby, WeLeftLobby,
-    },
-    send_msg,
+        LobbyInfoReceived, MyPlayerId, PlayerChangedPositions, PlayerChangedTeam, PlayerInfoReceived, PlayerJoinedLobby, PlayerLeftLobby, PlayerLockedSelection, PlayerSelectedChamp, WeJoinedLobby, WeLeftLobby
+    }, send_msg, LobbyAnchor, LobbyMenuState
 };
 
 pub mod player_slot;
@@ -40,19 +35,23 @@ pub fn client(app: &mut App) {
         .add_observer(on_player_info_received)
         .add_observer(update_lobby_on::<PlayerJoinedLobby>)
         .add_observer(update_lobby_on::<PlayerLeftLobby>)
+        .add_observer(update_lobby_on::<PlayerSelectedChamp>)
+        .add_observer(update_lobby_on::<PlayerLockedSelection>)
         .add_observer(on_player_swap_team)
         .add_observer(on_player_swap_positions)
         .add_observer(on_we_left_lobby)
-        .insert_resource(PlayerInfoCache {
-            cache: HashMap::new(),
-        });
+        .init_resource::<PlayerInfoCache>();
 }
 
-pub fn setup(trigger: Trigger<WeJoinedLobby>, sender: Res<LobbySender>, mut commands: Commands) {
+pub fn setup(trigger: Trigger<WeJoinedLobby>, mut options: ResMut<Options>, sender: Res<LobbySender>, mut commands: Commands) {
     commands.set_state(LobbyMenuState::InLobby);
     let _ = sender
         .0
         .send(ClientToLobby::GetLobbyInfo(trigger.event().0));
+    if options.auto_start {
+        options.auto_start = false;
+        _ = sender.send(ClientToLobby::GoToChampSelect);
+    }
 }
 
 #[derive(Component)]
@@ -325,9 +324,28 @@ fn on_lobby_info_update(
     // commands.run_system_cached(on_leader_changed_team);
 }
 
-#[derive(Resource)]
-struct PlayerInfoCache {
+#[derive(Resource, Default)]
+pub struct PlayerInfoCache {
     cache: HashMap<PlayerId, PlayerInfo>,
+    last_fetch_times: HashMap<PlayerId, f32>
+}
+
+impl PlayerInfoCache {
+    pub fn get(&self, id: PlayerId) -> Option<&PlayerInfo> {
+        self.cache.get(&id)
+    }
+
+    pub fn fetch(&mut self, id: PlayerId, sender: &LobbySender, time: &Time) -> Option<&PlayerInfo> {
+        let now = time.delta_secs();
+        if let Some(info) = self.cache.get(&id) {
+            return Some(info);
+        }
+        if self.last_fetch_times.get(&id).is_none_or(|x| now - x > 5.0) {
+            _ = sender.send(ClientToLobby::GetPlayerInfo(id));
+            self.last_fetch_times.insert(id, now);
+        }
+        None
+    }
 }
 
 fn on_player_info_received(
@@ -530,7 +548,7 @@ fn lobby_settings2(settings: &LobbySettings) -> impl View {
         .with(ButtonView::new(
             "Start Game",
             "start game",
-            send_msg(ClientToLobby::GoToChampSelect)
+            send_msg(ClientToLobby::GoToChampSelect),
         ))
         .styled()
         .align_items(AlignItems::Baseline)
@@ -637,10 +655,10 @@ fn team2(
 }
 
 fn player_slot(player: Option<PlayerId>) -> impl View {
-    let mut container = ListView::new();
-    if let Some(player) = player {
-        container.add(player_slot_content(player));
-    }
+    let mut container = ContainerView::new(player.map(player_slot_content));
+    // if let Some(player) = player {
+    //     container.add(player_slot_content(player));
+    // }
     container
         .styled()
         .border_color(Color::WHITE)
@@ -650,11 +668,9 @@ fn player_slot(player: Option<PlayerId>) -> impl View {
 }
 
 fn player_slot_content(player: PlayerId) -> impl View {
-    info!("Why isn't stuff happening?");
     SubtreeView::new(
         format!("player_slot_{}", player.0),
-        move |cache: Res<PlayerInfoCache>,
-              mut local: Local<f32>,
+        move |mut cache: ResMut<PlayerInfoCache>,
               lobby: Res<CurrentLobbyInfo>,
               sender: Res<LobbySender>,
               time: Res<Time>,
@@ -664,16 +680,7 @@ fn player_slot_content(player: PlayerId) -> impl View {
             }
             info!("SOMETHING CHANGED");
 
-            let Some(this_player) = cache.cache.get(&player) else {
-                let time_since_send = time.elapsed_secs() - *local;
-                if *local == 0.0 || time_since_send > 5.0 {
-                    _ = sender.send(ClientToLobby::GetPlayerInfo(player));
-                    *local = time.elapsed_secs();
-                    info!("Getting player information for {}", player.0);
-                }
-
-                return None;
-            };
+            let this_player = cache.fetch(player, &sender, &time)?;
 
             let i_am_leader = lobby.0.leader == my_id.0;
             let is_leader = lobby.0.leader == player;
@@ -681,25 +688,26 @@ fn player_slot_content(player: PlayerId) -> impl View {
 
             let can_kick = i_am_leader && !this_is_me;
 
-            Some(
-                ListView::new()
-                    .with(is_leader.then(|| TextView::new("[L]")))
-                    .with(TextView::new(&this_player.name).styled().flex_grow(1.0))
-                    .with(can_kick.then(|| {
-                        ButtonView::new(
-                            TextView::new("Kick"),
-                            format!("kick_{}", player.0),
-                            send_msg(ClientToLobby::KickPlayer(player)),
-                        )
-                    }))
-                    .styled()
-                    .column_gap(Val::Px(10.0))
-                    .flex_grow(1.0)
-                    .align_items(AlignItems::Baseline)
-                    .padding(UiRect::all(Val::Px(2.0))),
-            )
+            let view = ListView::new()
+                .with(is_leader.then(|| TextView::new("[L]")))
+                .with(TextView::new(&this_player.name).styled().flex_grow(1.0))
+                .with(can_kick.then(|| {
+                    ButtonView::new(
+                        TextView::new("Kick"),
+                        format!("kick_{}", player.0),
+                        send_msg(ClientToLobby::KickPlayer(player)),
+                    )
+                }))
+                .styled()
+                .column_gap(Val::Px(10.0))
+                .flex_grow(1.0)
+                .align_items(AlignItems::Baseline)
+                .padding(UiRect::all(Val::Px(2.0)));
+            println!("{view:#?}");
+            Some(view)
         },
     )
-    .styled()
-    .flex_grow(1.0)
+    .styled().width(Val::Percent(100.0))
+    // .styled()
+    // .flex_grow(1.0)
 }

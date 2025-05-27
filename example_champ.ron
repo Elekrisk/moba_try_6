@@ -1,0 +1,5 @@
+ChampionDef(
+    id: ChampionId("00000000-0000-0000-0000-000000000000"),
+    name: "Example Champion",
+    icon: "champs/unknown.png",
+)

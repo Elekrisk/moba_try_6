@@ -3,18 +3,23 @@ use bevy::{input::mouse::MouseScrollUnit, prelude::*};
 use super::{View, Widget};
 
 pub fn client(app: &mut App) {
-    app.add_observer(|mut trigger: Trigger<Pointer<Scroll>>, mut q: Query<&mut ScrollPosition, With<Scrollable>>| {
-        if let Ok(mut pos) = q.get_mut(trigger.target()) {
-            info!("SCROLL! {}", pos.offset_y);
-            pos.offset_y -= trigger.event().y * match trigger.event().unit {
-                MouseScrollUnit::Line => 24.0,
-                MouseScrollUnit::Pixel => 1.0,
-            };
-            trigger.propagate(false);
-        }
-    });
+    app.add_observer(
+        |mut trigger: Trigger<Pointer<Scroll>>,
+         mut q: Query<&mut ScrollPosition, With<Scrollable>>| {
+            if let Ok(mut pos) = q.get_mut(trigger.target()) {
+                info!("SCROLL! {}", pos.offset_y);
+                pos.offset_y -= trigger.event().y
+                    * match trigger.event().unit {
+                        MouseScrollUnit::Line => 24.0,
+                        MouseScrollUnit::Pixel => 1.0,
+                    };
+                trigger.propagate(false);
+            }
+        },
+    );
 }
 
+#[derive(Debug)]
 pub struct ScrollableView<V: View> {
     pub inner: V,
 }
@@ -40,6 +45,10 @@ impl<V: View> View for ScrollableView<V> {
 
     fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, commands: Commands) {
         self.inner.rebuild(&prev.inner, &mut widget.inner, commands);
+    }
+
+    fn name(&self) -> String {
+        format!("{} C", self.inner.name())
     }
 }
 
