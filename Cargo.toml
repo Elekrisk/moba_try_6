@@ -24,3 +24,10 @@ lto = "thin"
 
 [patch.crates-io]
 ring = { git = "https://github.com/briansmith/ring" }
+
+[workspace.metadata.cross.target.x86_64-pc-windows-gnu]
+# Install libssl-dev:arm64, see <https://github.com/cross-rs/cross/blob/main/docs/custom_images.md#adding-dependencies-to-existing-images>
+pre-build = [
+    "dpkg --add-architecture $CROSS_DEB_ARCH",
+    "apt-get update && apt-get --assume-yes install clang:$CROSS_DEB_ARCH"
+]

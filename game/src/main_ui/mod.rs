@@ -51,7 +51,7 @@ pub enum LobbyMenuState {
     InChampSelect,
 }
 
-pub fn create_ui(options: Res<Options>, mut commands: Commands) {
+pub fn create_ui(mut options: ResMut<Options>, mut commands: Commands) {
     commands.spawn((
         StateScoped(ClientState::NotInGame),
         Node {
@@ -62,6 +62,7 @@ pub fn create_ui(options: Res<Options>, mut commands: Commands) {
         UiTree::once(ui_root2),
     ));
     if options.connect {
+        options.connect = false;
         commands.run_system_cached(connect);
     }
 }
@@ -137,8 +138,6 @@ fn connecting_screen() -> impl View {
 }
 
 fn on_lobby_connection_error(trigger: Trigger<LobbyConnectionFailed>, mut commands: Commands) {
-    println!("Failed!");
-
     commands.insert_resource(LobbyConnectionFailureReason(trigger.event().0.to_string()));
     commands.set_state(ConnectionState::ConnectionFailed);
 

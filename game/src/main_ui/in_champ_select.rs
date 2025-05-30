@@ -177,32 +177,6 @@ fn player_slot_2(team: Team, player: PlayerId) -> SubtreeView<impl UiFunc> {
     )
 }
 
-// fn champ_select_list() -> Stylable<impl View> {
-//     let mut list = ListView::new();
-
-//     let champs = (0..100).map(|i| format!("Champ {i}")).collect::<Vec<_>>();
-
-//     for champ in champs {
-//         let label = format!("champ_select_{champ}");
-//         list.add(
-//             ButtonView::new(
-//                 champ.clone(),
-//                 label,
-//                 send_msg(ClientToLobby::SelectChamp(champ)),
-//             )
-//             .styled()
-//             .width(Val::Px(100.0))
-//             .height(Val::Px(100.0)),
-//         );
-//     }
-
-//     list.styled()
-//         .flex_wrap(FlexWrap::Wrap)
-//         .justify_content(JustifyContent::Center)
-//         .row_gap(Val::Px(10.0))
-//         .column_gap(Val::Px(10.0))
-// }
-
 fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
     if !res.is_changed() {
         return None;
@@ -210,17 +184,9 @@ fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
 
     let mut list = ListView::new();
 
-    let def = ChampionDef {
-        id: ChampionId(Uuid::new_v4()),
-        name: "zzzWEEEE".into(),
-        icon: "hallabalou".into(),
-    };
-
     let mut champs = res
         .map
         .values()
-        .chain(std::iter::repeat(&def))
-        .take(100)
         .collect::<Vec<_>>();
     champs.sort_by_key(|c| &c.name);
 
@@ -250,6 +216,7 @@ fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
             .flex_wrap(FlexWrap::Wrap)
             .justify_content(JustifyContent::Center)
             .row_gap(Val::Px(10.0))
-            .column_gap(Val::Px(10.0)),
+            .column_gap(Val::Px(10.0))
+            .width(Val::Percent(100.0)),
     )
 }

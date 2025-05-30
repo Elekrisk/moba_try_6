@@ -1,0 +1,5 @@
+MapDef(
+    id: ("26691139-1c53-4f4c-83aa-f1e166f59881"),
+    name: "Default Map",
+    script: "./map.lua"
+)

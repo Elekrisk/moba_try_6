@@ -811,7 +811,7 @@ mod wee {
             println!("Starting game server...");
             // Start game in some way
             let mut child = Command::new("cargo")
-                .args(["run", "--bin=server", "--verbose", "--", "--address", "127.0.0.1", "54655"])
+                .args(["run", "--bin=server", "--", "--address", "127.0.0.1", "54655"])
                 .spawn()?;
 
             lobby.lobby_state = LobbyState::InGame;

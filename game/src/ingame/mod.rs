@@ -4,29 +4,48 @@ use bevy::prelude::*;
 use lightyear::{
     client::config::ClientConfig,
     prelude::{
-        client::{self, Authentication, ClientCommandsExt}, server::{self, ServerCommandsExt}, ConnectToken
+        ClientDisconnectEvent, ConnectToken,
+        client::{self, Authentication, ClientCommandsExt},
+        server::{self, ServerCommandsExt},
     },
     server::config::ServerConfig,
 };
 
 use crate::ClientState;
 
-pub mod network;
+#[macro_use]
 pub mod lua;
+pub mod camera;
+pub mod hittable;
 pub mod map;
+pub mod network;
+pub mod structure;
+pub mod terrain;
+pub mod unit;
+pub mod navmesh;
 
 pub fn client(app: &mut App) {
+    app.add_plugins((network::client, camera::client, terrain::client))
+        .add_systems(Update, on_disconnect);
     common(app);
-
-    app.add_plugins(network::client);
 }
 pub fn server(app: &mut App) {
-    common(app);
-
     app.add_plugins(network::server)
         .add_systems(Startup, network::init_server);
+    common(app);
 }
-pub fn common(_app: &mut App) {}
+pub fn common(app: &mut App) {
+    app.add_plugins((
+        lua::common,
+        network::common,
+        map::common,
+        hittable::common,
+        structure::common,
+        terrain::common,
+        navmesh::common,
+        unit::common,
+    ));
+}
 
 pub struct ConnectToGameServer(pub ConnectToken);
 
@@ -39,8 +58,14 @@ impl Command for ConnectToGameServer {
 
         *auth = Authentication::Token(self.0);
 
-        println!("Connecting...");
         world.connect_client();
         world.commands().set_state(ClientState::InGame);
+    }
+}
+
+fn on_disconnect(mut events: EventReader<ClientDisconnectEvent>, mut commands: Commands) {
+    for event in events.read() {
+        info!("Disconnect: {event:?}");
+        commands.set_state(ClientState::NotInGame);
     }
 }

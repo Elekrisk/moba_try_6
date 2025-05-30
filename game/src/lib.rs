@@ -6,14 +6,12 @@
 #![feature(iter_intersperse)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(debug_closure_helpers)]
+#![feature(array_windows)]
 
 use std::{fmt::Display, path::PathBuf};
 
 use bevy::{
-    asset::AssetLoader,
-    ecs::bundle::{BundleEffect, DynamicBundle},
-    platform::collections::HashMap,
-    prelude::*,
+    asset::AssetLoader, ecs::bundle::{BundleEffect, DynamicBundle}, math::VectorSpace, platform::collections::HashMap, prelude::*
 };
 
 mod r#async;
@@ -24,6 +22,7 @@ pub mod ui;
 pub mod ingame;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
+use ingame::network::ServerOptions;
 use lightyear::{connection::netcode::Server, prelude::{server::NetServer, ServerConnectionManager}};
 pub use network::LobbySender;
 
@@ -34,7 +33,11 @@ pub fn client(app: &mut App) {
     app.add_systems(Startup, client_setup)
         .add_systems(OnEnter(ClientState::InGame), || info!("Entered InGame state"));
 
-    app.insert_state(ClientState::NotInGame);
+    app.insert_state(if app.world().resource::<Options>().immediately_ingame {
+        ClientState::InGame
+    } else {
+        ClientState::NotInGame
+    });
 }
 
 pub fn server(app: &mut App) {
@@ -52,7 +55,7 @@ pub fn server(app: &mut App) {
 }
 
 fn common(app: &mut App) {
-    app.add_plugins((r#async::common, ingame::common));
+    app.add_plugins(r#async::common);
     app.register_asset_loader(ChampionDefLoader)
         .register_asset_loader(ChampDefsLoader)
         .init_asset::<ChampionDef>()
@@ -73,7 +76,12 @@ fn client_setup(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection::default()),
+        Transform::from_xyz(0.0, 55.0, 55.0).looking_at(Vec3::ZERO, Vec3::Y),
+        // Transform::from_xyz(0.0, 55.0, 0.0).looking_at(Vec3::ZERO, Vec3::new(-1.0, 0.0, -1.0).normalize())
     ));
+    commands.spawn((DirectionalLight {
+        ..default()
+    }, Transform::from_xyz(15.0, 15.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y)));
 }
 
 #[derive(Resource, clap::Parser)]
@@ -86,6 +94,8 @@ pub struct Options {
     auto_start: bool,
     #[arg(long)]
     pub log_file: Option<PathBuf>,
+    #[arg(long)]
+    immediately_ingame: bool,
 }
 
 #[derive(Clone, Default, clap::ValueEnum)]
@@ -221,5 +231,18 @@ impl AssetLoader for ChampDefsLoader {
 
     fn extensions(&self) -> &[&str] {
         &["ron"]
+    }
+}
+
+pub trait AppExt {
+    fn is_server(&self) -> bool;
+    fn is_client(&self) -> bool {
+        !self.is_server()
+    }
+}
+
+impl AppExt for App {
+    fn is_server(&self) -> bool {
+        self.world().contains_resource::<ServerOptions>()
     }
 }

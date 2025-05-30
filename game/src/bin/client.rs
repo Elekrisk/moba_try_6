@@ -1,12 +1,7 @@
 use std::{any::TypeId, fs::File, path::PathBuf, sync::OnceLock};
 
 use bevy::{
-    asset::{ReflectAsset, UntypedAssetId},
-    log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
-    prelude::*,
-    reflect::TypeRegistry,
-    render::camera::Viewport,
-    window::PrimaryWindow,
+    asset::{ReflectAsset, UntypedAssetId}, dev_tools::fps_overlay::FpsOverlayPlugin, ecs::system::SystemIdMarker, log::{tracing_subscriber::Layer, BoxedLayer, LogPlugin}, prelude::*, reflect::TypeRegistry, render::camera::Viewport, window::PrimaryWindow
 };
 use bevy_enhanced_input::{
     EnhancedInputPlugin,
@@ -17,8 +12,8 @@ use bevy_inspector_egui::{
     DefaultInspectorConfigPlugin,
     bevy_egui::{EguiContext, EguiContextPass, EguiContextSettings, EguiPlugin},
     bevy_inspector::{
-        self,
-        hierarchy::{SelectedEntities, hierarchy_ui},
+        self, EntityFilter,
+        hierarchy::{Hierarchy, SelectedEntities, hierarchy_ui},
         ui_for_entities_shared_components, ui_for_entity_with_children,
     },
     quick::WorldInspectorPlugin,
@@ -56,56 +51,59 @@ fn main() -> AppExit {
     if let Some(log_file) = &options.log_file {
         LOG_FILE.set(log_file.clone()).unwrap()
     }
-    app.add_plugins((
-        DefaultPlugins
-            .set(WindowPlugin {
-                primary_window: Some(Window {
-                    fit_canvas_to_parent: true,
+    app.insert_resource(options)
+        .add_plugins((
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        fit_canvas_to_parent: true,
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .set(LogPlugin {
+                    custom_layer,
+                    // filter: "lightyear=debug,lightyear::client::sync=info".into(),
+                    // level: bevy::log::Level::DEBUG,
                     ..default()
                 }),
-                ..default()
-            })
-            .set(LogPlugin {
-                custom_layer,
-                ..default()
-            }),
-        game::client,
-        EguiPlugin {
-            enable_multipass_for_primary_context: true,
-        },
-        DefaultInspectorConfigPlugin,
-        inspector,
-        EnhancedInputPlugin,
-    ))
-    .insert_resource(options)
-    .insert_resource(RunInspector(false))
-    .add_input_context::<GlobalInput>()
-    .add_systems(Startup, |mut commands: Commands| {
-        let mut actions = Actions::<GlobalInput>::default();
-        actions
-            .bind::<ToggleInspector>()
-            .to(KeyCode::F3)
-            .with_conditions(JustPress::default());
-        commands.spawn(actions).observe(
-            |_: Trigger<Fired<ToggleInspector>>, mut r: ResMut<RunInspector>| {
-                info!("Toggle inspector fired!");
-                r.0 = !r.0;
+            FpsOverlayPlugin::default(),
+            EguiPlugin {
+                enable_multipass_for_primary_context: true,
             },
-        );
-    })
-    .add_systems(
-        PostUpdate,
-        (|mut events: EventReader<AppExit>, sender: Option<Res<LobbySender>>| {
-            for _ in events.read() {
-                if let Some(ref sender) = sender {
-                    info!("Sending DISCONNECT");
-                    _ = sender.0.send(ClientToLobby::Disconnect);
-                }
-            }
+            DefaultInspectorConfigPlugin,
+            inspector,
+            EnhancedInputPlugin,
+            game::client,
+        ))
+        .insert_resource(RunInspector(false))
+        .add_input_context::<GlobalInput>()
+        .add_systems(Startup, |mut commands: Commands| {
+            let mut actions = Actions::<GlobalInput>::default();
+            actions
+                .bind::<ToggleInspector>()
+                .to(KeyCode::F3)
+                .with_conditions(JustPress::default());
+            commands.spawn(actions).observe(
+                |_: Trigger<Fired<ToggleInspector>>, mut r: ResMut<RunInspector>| {
+                    info!("Toggle inspector fired!");
+                    r.0 = !r.0;
+                },
+            );
         })
-        .after(bevy::window::exit_on_all_closed),
-    )
-    .run()
+        .add_systems(
+            PostUpdate,
+            (|mut events: EventReader<AppExit>, sender: Option<Res<LobbySender>>| {
+                for _ in events.read() {
+                    if let Some(ref sender) = sender {
+                        info!("Sending DISCONNECT");
+                        _ = sender.0.send(ClientToLobby::Disconnect);
+                    }
+                }
+            })
+            .after(bevy::window::exit_on_all_closed),
+        )
+        .run()
 }
 
 #[derive(Resource, PartialEq, Eq)]
@@ -224,7 +222,21 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 *self.viewport_rect = ui.clip_rect();
             }
             EguiWindow::Hierarchy => {
-                let selected = hierarchy_ui(self.world, ui, self.selected_entities);
+                // let selected = hierarchy_ui(self.world, ui, self.selected_entities);
+                let type_registry = self.world.resource::<AppTypeRegistry>().clone();
+                let type_registry = type_registry.read();
+
+                let filter = ComponentSearch::from_ui(ui, egui::Id::new("component_search_filter"));
+                let selected = Hierarchy {
+                    world: self.world,
+                    type_registry: &type_registry,
+                    selected: self.selected_entities,
+                    context_menu: None,
+                    shortcircuit_entity: None,
+                    extra_state: &mut (),
+                }
+                .show_with_filter::<(Without<SystemIdMarker>, Without<Observer>), _>(ui, filter);
+
                 if selected {
                     *self.selection = InspectorSelection::Entities;
                 }
@@ -258,6 +270,51 @@ impl egui_dock::TabViewer for TabViewer<'_> {
                 }
             },
         }
+    }
+}
+
+struct ComponentSearch {
+    component_name: String,
+}
+
+impl ComponentSearch {
+    fn from_ui(ui: &mut egui::Ui, id: egui::Id) -> Self {
+        let word = {
+            let id = id.with("word");
+            let mut filter_string = ui.memory_mut(|mem| {
+                let filter: &mut String = mem.data.get_persisted_mut_or_default(id);
+                filter.clone()
+            });
+            ui.text_edit_singleline(&mut filter_string);
+            ui.memory_mut(|mem| {
+                *mem.data.get_persisted_mut_or_default(id) = filter_string.clone();
+            });
+
+            // improves overall matching
+            filter_string.to_lowercase()
+        };
+
+        Self {
+            component_name: word,
+        }
+    }
+}
+
+impl EntityFilter for ComponentSearch {
+    type StaticFilter = (Without<SystemIdMarker>, Without<Observer>);
+
+    fn filter_entity(&self, world: &mut World, entity: Entity) -> bool {
+        for comp in world.inspect_entity(entity).unwrap() {
+            if comp
+                .name()
+                .to_lowercase()
+                .contains(&self.component_name)
+            {
+                return true;
+            }
+        }
+
+        false
     }
 }
 
@@ -344,12 +401,6 @@ fn set_camera_viewport(
     };
 
     if !run_inspector.0 {
-        // println!("Update viewport!");
-        // cam.viewport = Some(Viewport {
-        //     physical_position: default(),
-        //     physical_size: window.physical_size(),
-        //     depth: 0.0..1.0,
-        // });
         cam.viewport = None;
         return;
     }

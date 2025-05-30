@@ -379,7 +379,6 @@ fn player_slot_content(player: PlayerId) -> impl View {
                 .flex_grow(1.0)
                 .align_items(AlignItems::Baseline)
                 .padding(UiRect::all(Val::Px(2.0)));
-            println!("{view:#?}");
             Some(view)
         },
     )

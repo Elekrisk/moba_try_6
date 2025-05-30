@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.16", features = ["track_location", "ghost_nodes"] }
+bevy = { version = "0.16", features = ["track_location", "ghost_nodes", "file_watcher", "bevy_dev_tools"] }
 # Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.
 log = { version = "0.4", features = [
     "max_level_debug",
@@ -17,11 +17,17 @@ tracing = { version = "0.1", features = [
 lightyear = { version = "0.20.2", features = ["udp"] }
 xwt-core = "0.6.0"
 # bevy-tokio-tasks = "0.16.0"
-tokio = { version = "1.45", features = ["sync", "io-util", "rt", "macros", "time"]}
+tokio = { version = "1.45", features = [
+    "sync",
+    "io-util",
+    "rt",
+    "macros",
+    "time",
+] }
 serde = "1.0.219"
 serde_json = "1.0.140"
-lobby_common = { path = "../lobby_common" }
-engine_common = { path = "../engine_common", features = ["bevy"]}
+lobby_common = { path = "../lobby_common", features = ["bevy"] }
+engine_common = { path = "../engine_common", features = ["bevy"] }
 whoami = "1.6.0"
 anyhow = "1.0.98"
 getrandom = { version = "0.3", features = ["wasm_js"] }
@@ -32,11 +38,25 @@ tracing-appender = "0.2.3"
 egui_dock = "0.16"
 ron = "0.10.1"
 public-ip-address = "0.3.3"
-mlua = { version = "0.10.5", features = ["luau", "serialize", "macros", "mlua_derive", "send"] }
+mlua = { version = "0.10.5", features = [
+    "luau",
+    "serialize",
+    "macros",
+    "mlua_derive",
+    "send",
+    "async",
+] }
+vleue_navigator = { version = "0.12.0", default-features = false }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 wtransport = { version = "0.6.1", features = ["dangerous-configuration"] }
-tokio = { version = "1.45", features = ["sync", "io-util", "rt-multi-thread", "macros", "time"]}
+tokio = { version = "1.45", features = [
+    "sync",
+    "io-util",
+    "rt-multi-thread",
+    "macros",
+    "time",
+] }
 
 xwt-wtransport = "0.13.2"
 [target.'cfg(target_family = "wasm")'.dependencies]
