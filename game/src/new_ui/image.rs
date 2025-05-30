@@ -25,9 +25,7 @@ impl View for ImageView {
             .spawn((ImageNode::default(),))
             .queue(move |mut entity: EntityWorldMut<'_>| {
                 let img = entity.resource::<AssetServer>().load(path);
-                entity.insert(
-                    ImageNode::new(img)
-                );
+                entity.insert(ImageNode::new(img));
             })
             .id();
 

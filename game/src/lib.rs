@@ -24,7 +24,6 @@ pub mod ui;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
 pub use network::LobbySender;
-use ui::custom_effect;
 
 pub fn client(app: &mut App) {
     common(app);
@@ -100,20 +99,6 @@ impl Display for LobbyMode {
                 Self::AutoJoinFirst => "auto-join-first",
             }
         )
-    }
-}
-
-struct InsertIf<F, B>(F, B);
-
-custom_effect!(InsertIf<F, B> where F: FnOnce(&mut EntityWorldMut) -> bool + Send + Sync + 'static, B: Bundle);
-
-impl<F: FnOnce(&mut EntityWorldMut) -> bool + Send + Sync + 'static, B: Bundle> BundleEffect
-    for InsertIf<F, B>
-{
-    fn apply(self, entity: &mut EntityWorldMut) {
-        if self.0(entity) {
-            entity.insert(self.1);
-        }
     }
 }
 

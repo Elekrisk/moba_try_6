@@ -399,7 +399,7 @@ mod wee {
                 }
                 InternalMessage::GameTokenCreated(player_id, token) => {
                     _ = self.send_message(player_id, LobbyToClient::GameStarted(token));
-                },
+                }
             }
 
             Ok(())
@@ -862,10 +862,7 @@ mod wee {
 
                 for (player, token) in tokens {
                     sender
-                        .send(InternalMessage::GameTokenCreated(
-                            player,
-                            token,
-                        ))
+                        .send(InternalMessage::GameTokenCreated(player, token))
                         .unwrap();
                 }
             });

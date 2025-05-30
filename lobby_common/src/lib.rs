@@ -118,15 +118,13 @@ impl PlayerId {
 pub enum LobbyToServer {
     Handshake {
         settings: LobbySettings,
-        players: Vec<PlayerGameInfo>
-    }
+        players: Vec<PlayerGameInfo>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerToLobby {
-    PlayerTokens {
-        tokens: HashMap<PlayerId, Vec<u8>>
-    },
+    PlayerTokens { tokens: HashMap<PlayerId, Vec<u8>> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

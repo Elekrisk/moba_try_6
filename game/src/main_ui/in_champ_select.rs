@@ -1,18 +1,17 @@
-use bevy::{asset::uuid::Uuid, ecs::spawn::SpawnIter, prelude::*};
+use bevy::{asset::uuid::Uuid, prelude::*};
 use engine_common::{ChampionDef, ChampionId};
-use lobby_common::{ClientToLobby, LobbyInfo, PlayerId, Team};
+use lobby_common::{ClientToLobby, PlayerId, Team};
 
 use crate::{
     ChampDefs, LobbySender,
     new_ui::{
-        View, ViewExt, button::ButtonView, image::ImageView, list::ListView, stylable::Stylable,
-        subtree::SubtreeView, tree::UiFunc,
+        View, ViewExt, button::ButtonView, image::ImageView, list::ListView, subtree::SubtreeView,
+        tree::UiFunc,
     },
-    ui::text::text,
 };
 
 use super::{
-    LobbyAnchor, LobbyMenuState,
+    LobbyMenuState,
     in_lobby::{CurrentLobbyInfo, PlayerInfoCache},
     lobby_list::{GoToChampSelect, ReturnFromChampSelect},
     send_msg,
@@ -28,11 +27,11 @@ fn setup_ui(info: Res<CurrentLobbyInfo>, sender: Res<LobbySender>) {
     _ = sender.send(ClientToLobby::GetLobbyInfo(info.0.short.id));
 }
 
-fn on_goto_champ_select(trigger: Trigger<GoToChampSelect>, mut commands: Commands) {
+fn on_goto_champ_select(_trigger: Trigger<GoToChampSelect>, mut commands: Commands) {
     commands.set_state(LobbyMenuState::InChampSelect);
 }
 
-fn on_return_from_champ_select(trigger: Trigger<ReturnFromChampSelect>, mut commands: Commands) {
+fn on_return_from_champ_select(_trigger: Trigger<ReturnFromChampSelect>, mut commands: Commands) {
     commands.set_state(LobbyMenuState::InLobby);
 }
 
@@ -59,7 +58,7 @@ fn champ_select3(lobby: Res<CurrentLobbyInfo>) -> Option<impl View + use<>> {
     let mut team_list = ListView::new();
 
     for pair in team_pairs {
-        team_list.add(team_pair(pair, lobby));
+        team_list.add(team_pair(pair));
     }
 
     let middle = ListView::new()
@@ -69,7 +68,11 @@ fn champ_select3(lobby: Res<CurrentLobbyInfo>) -> Option<impl View + use<>> {
                 .width(Val::Percent(100.0))
                 .scrollable(),
         )
-        .with(ButtonView::new("Lock", "lock_selection", send_msg(ClientToLobby::LockSelection)))
+        .with(ButtonView::new(
+            "Lock",
+            "lock_selection",
+            send_msg(ClientToLobby::LockSelection),
+        ))
         .styled()
         .width(Val::Percent(34.0))
         .position_type(PositionType::Absolute)
@@ -98,15 +101,12 @@ fn champ_select3(lobby: Res<CurrentLobbyInfo>) -> Option<impl View + use<>> {
     )
 }
 
-fn team_pair(
-    mut pair: impl Iterator<Item = (Team, &Vec<PlayerId>)>,
-    lobby: &LobbyInfo,
-) -> impl View {
+fn team_pair(mut pair: impl Iterator<Item = (Team, &Vec<PlayerId>)>) -> impl View {
     let (left_team, left_players) = pair.next().unwrap();
 
-    let mut list = ListView::new().with(team(left_team, left_players, lobby));
+    let mut list = ListView::new().with(team(left_team, left_players));
     if let Some((right_team, right_players)) = pair.next() {
-        list.add(team(right_team, right_players, lobby));
+        list.add(team(right_team, right_players));
     }
 
     list.styled()
@@ -114,21 +114,21 @@ fn team_pair(
         .justify_content(JustifyContent::SpaceBetween)
 }
 
-fn team(team: Team, players: &Vec<PlayerId>, lobby: &LobbyInfo) -> impl View {
+fn team(team: Team, players: &Vec<PlayerId>) -> impl View {
     ListView::from_iter(
         players
             .iter()
             .copied()
             .chain(std::iter::repeat(PlayerId::new()))
             .take(5)
-            .map(|p| player_slot(team, p, lobby)),
+            .map(|p| player_slot(team, p)),
     )
     .styled()
     .flex_direction(FlexDirection::Column)
     .width(Val::Percent(33.0))
 }
 
-fn player_slot(team: Team, player: PlayerId, lobby: &LobbyInfo) -> impl View {
+fn player_slot(team: Team, player: PlayerId) -> impl View {
     player_slot_2(team, player)
 }
 

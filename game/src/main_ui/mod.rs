@@ -1,11 +1,3 @@
-use bevy::{
-    ecs::{entity_disabling::Disabled, spawn::SpawnIter},
-    prelude::*,
-    state::state::FreelyMutableState,
-};
-use lobby_common::ClientToLobby;
-use lobby_list::{connected_to_lobby_server, lobby_list2};
-
 use crate::{
     ClientState, LobbySender, Options,
     network::{ConnectToLobbyCommand, LobbyConnectionFailed},
@@ -17,10 +9,12 @@ use crate::{
         subtree::SubtreeView,
         tabbed::TabbedView,
         text::TextView,
-        tree::{IfRunner, OnceRunner, UiTree},
+        tree::{OnceRunner, UiTree},
     },
-    ui::{ObservedBy, button::button2, scrollable, tab_bar::tab_bar, text::text},
 };
+use bevy::{prelude::*, state::state::FreelyMutableState};
+use lobby_common::ClientToLobby;
+use lobby_list::connected_to_lobby_server;
 
 mod in_champ_select;
 mod in_lobby;
@@ -35,10 +29,6 @@ pub fn client(app: &mut App) {
             in_champ_select::client,
         ))
         .add_systems(OnEnter(ClientState::NotInGame), create_ui)
-        .add_systems(
-            OnEnter(ConnectionState::NotConnected),
-            create_lobby_connection_screen,
-        )
         .add_systems(OnEnter(ConnectionState::Connecting), on_connect_start);
 }
 
@@ -98,23 +88,6 @@ fn ui_root2() -> Option<impl View> {
     )
 }
 
-// fn ui_root() -> impl Bundle {
-//     (
-//         Node {
-//             width: Val::Percent(100.0),
-//             height: Val::Percent(100.0),
-//             flex_direction: FlexDirection::Column,
-//             ..default()
-//         },
-//         children![
-//             tab_bar()
-//                 .tab("Lobbies", lobby_anchor())
-//                 .tab("Reference", Text::new("Reference placeholder"))
-//                 .tab("Settings", Text::new("Yeehaw")),
-//         ],
-//     )
-// }
-
 fn lobby_anchor2(state: Res<State<ConnectionState>>) -> Option<impl View + use<>> {
     if !state.is_changed() {
         return None;
@@ -122,9 +95,9 @@ fn lobby_anchor2(state: Res<State<ConnectionState>>) -> Option<impl View + use<>
 
     Some(match state.get() {
         ConnectionState::NotConnected => lobby_connection_screen2().boxed(),
-        ConnectionState::Connecting => connecting_screen2().boxed(),
+        ConnectionState::Connecting => connecting_screen().boxed(),
         ConnectionState::ConnectionFailed => {
-            SubtreeView::new("error_screen", OnceRunner::new(connection_error_screen2))
+            SubtreeView::new("error_screen", OnceRunner::new(connection_error_screen))
                 .styled()
                 .width(Val::Percent(100.0))
                 .boxed()
@@ -136,22 +109,6 @@ fn lobby_anchor2(state: Res<State<ConnectionState>>) -> Option<impl View + use<>
                 .boxed()
         }
     })
-}
-
-#[derive(Component)]
-pub struct LobbyAnchor;
-
-fn lobby_anchor() -> impl Bundle {
-    (
-        Node {
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            flex_direction: FlexDirection::Column,
-            ..default()
-        },
-        LobbyAnchor,
-        children![lobby_connection_screen()],
-    )
 }
 
 fn lobby_connection_screen2() -> impl View {
@@ -166,61 +123,20 @@ fn lobby_connection_screen2() -> impl View {
         .flex_direction(FlexDirection::Column)
 }
 
-fn create_lobby_connection_screen(
-    anchor: Single<Entity, With<LobbyAnchor>>,
-    mut commands: Commands,
-) {
-    commands
-        .entity(*anchor)
-        .with_child(lobby_connection_screen());
-}
-
-fn lobby_connection_screen() -> impl Bundle {
-    (
-        StateScoped(ConnectionState::NotConnected),
-        Node {
-            // width: Val::Percent(100.0),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            flex_direction: FlexDirection::Column,
-            flex_grow: 1.0,
-            ..default()
-        },
-        children![
-            text("Connect to elekrisk.com?"),
-            button2("Connect", set_state(ConnectionState::Connecting)),
-        ],
-    )
-}
-
 fn connect(mut commands: Commands) {
     commands.set_state(ConnectionState::Connecting);
 }
 
 fn on_connect_start(mut commands: Commands) {
-    // commands.entity(*anchor).with_child((
-    //     StateScoped(ConnectionState::Connecting),
-    //     connecting_screen(),
-    // ));
-    println!("Wahoo");
     commands.queue(ConnectToLobbyCommand("localhost:54654".into()));
     commands.add_observer(on_lobby_connection_error);
 }
 
-fn connecting_screen2() -> impl View {
+fn connecting_screen() -> impl View {
     TextView::new("Connecting...")
 }
 
-fn connecting_screen() -> impl Bundle {
-    Text::new("Connecting...")
-}
-
 fn on_lobby_connection_error(trigger: Trigger<LobbyConnectionFailed>, mut commands: Commands) {
-    // commands.entity(*anchor).with_child((
-    //     StateScoped(ConnectionState::ConnectionFailed),
-    //     connection_error_screen(trigger.event()),
-    // ));
-
     println!("Failed!");
 
     commands.insert_resource(LobbyConnectionFailureReason(trigger.event().0.to_string()));
@@ -233,9 +149,7 @@ fn on_lobby_connection_error(trigger: Trigger<LobbyConnectionFailed>, mut comman
 #[derive(Resource)]
 struct LobbyConnectionFailureReason(String);
 
-fn connection_error_screen2(
-    reason: Res<LobbyConnectionFailureReason>,
-) -> Option<impl View + use<>> {
+fn connection_error_screen(reason: Res<LobbyConnectionFailureReason>) -> Option<impl View + use<>> {
     Some(
         ListView::new()
             .with(TextView::new("Could not connect to lobby server:"))
@@ -247,20 +161,6 @@ fn connection_error_screen2(
             ))
             .styled()
             .flex_direction(FlexDirection::Column),
-    )
-}
-
-fn connection_error_screen(msg: &LobbyConnectionFailed) -> impl Bundle {
-    (
-        Node {
-            flex_direction: FlexDirection::Column,
-            ..default()
-        },
-        children![
-            Text::new("Could not connect to lobby server:"),
-            Text::new(msg.0.to_string()),
-            button2("Back", set_state(ConnectionState::NotConnected))
-        ],
     )
 }
 
