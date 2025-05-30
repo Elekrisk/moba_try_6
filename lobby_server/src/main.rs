@@ -811,7 +811,7 @@ mod wee {
             println!("Starting game server...");
             // Start game in some way
             let mut child = Command::new("cargo")
-                .args(["run", "--bin=server", "--verbose", "54655"])
+                .args(["run", "--bin=server", "--verbose", "--", "--address", "127.0.0.1", "54655"])
                 .spawn()?;
 
             lobby.lobby_state = LobbyState::InGame;
@@ -852,7 +852,7 @@ mod wee {
                         .build(),
                 )
                 .unwrap()
-                .connect("https://localhost:54655")
+                .connect("https://localhost:54653")
                 .await
                 .unwrap();
                 conn.send(LobbyToServer::Handshake { settings, players })

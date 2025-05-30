@@ -14,7 +14,7 @@ tracing = { version = "0.1", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
-lightyear = "0.20.2"
+lightyear = { version = "0.20.2", features = ["udp"] }
 xwt-core = "0.6.0"
 # bevy-tokio-tasks = "0.16.0"
 tokio = { version = "1.45", features = ["sync", "io-util", "rt", "macros", "time"]}
@@ -32,6 +32,7 @@ tracing-appender = "0.2.3"
 egui_dock = "0.16"
 ron = "0.10.1"
 public-ip-address = "0.3.3"
+mlua = { version = "0.10.5", features = ["luau", "serialize", "macros", "mlua_derive", "send"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 wtransport = { version = "0.6.1", features = ["dangerous-configuration"] }

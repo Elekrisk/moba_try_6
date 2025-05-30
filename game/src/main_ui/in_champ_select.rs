@@ -208,8 +208,6 @@ fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
         return None;
     }
 
-    info!("{:#?}", res);
-
     let mut list = ListView::new();
 
     let def = ChampionDef {

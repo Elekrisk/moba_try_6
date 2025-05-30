@@ -7,7 +7,6 @@ pub fn client(app: &mut App) {
         |mut trigger: Trigger<Pointer<Scroll>>,
          mut q: Query<&mut ScrollPosition, With<Scrollable>>| {
             if let Ok(mut pos) = q.get_mut(trigger.target()) {
-                info!("SCROLL! {}", pos.offset_y);
                 pos.offset_y -= trigger.event().y
                     * match trigger.event().unit {
                         MouseScrollUnit::Line => 24.0,

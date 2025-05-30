@@ -7,13 +7,9 @@ use lobby_common::{
 use tokio::sync::mpsc::error::TryRecvError;
 
 use crate::{
-    LobbyMode, Options,
-    main_ui::ConnectionState,
-    network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender},
-    new_ui::{
-        View, ViewExt, button::ButtonView, list::ListView, subtree::SubtreeView, text::TextView,
-        tree::IfRunner,
-    },
+    ingame::ConnectToGameServer, main_ui::ConnectionState, network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender}, new_ui::{
+        button::ButtonView, list::ListView, subtree::SubtreeView, text::TextView, tree::IfRunner, View, ViewExt
+    }, LobbyMode, Options
 };
 
 use super::{LobbyMenuState, in_champ_select::champ_select2, in_lobby::lobby_ui2, send_msg};
@@ -93,7 +89,6 @@ fn listen_to_lobby_server(
                 commands.insert_resource(MyPlayerId(id));
             }
             LobbyMessage::LobbyConnectionFailed(err) => {
-                info!("Triggering lobbyconnectedfailed");
                 commands.trigger(LobbyConnectionFailed(err));
             }
             LobbyMessage::ConnectionLost => {
@@ -152,7 +147,7 @@ fn listen_to_lobby_server(
                 }
                 LobbyToClient::GameStarted(items) => {
                     let token = ConnectToken::try_from_bytes(&items).unwrap();
-                    info!("Connect to server");
+                    commands.queue(ConnectToGameServer(token));
                 }
             },
         }

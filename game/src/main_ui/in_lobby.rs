@@ -96,7 +96,6 @@ fn on_player_info_received(
     mut cache: ResMut<PlayerInfoCache>,
 ) {
     let event = &trigger.event().0;
-    info!("Player info received: {:?}", event);
     cache.cache.insert(event.id, event.clone());
 }
 
@@ -170,8 +169,6 @@ pub fn lobby_ui3(info: Res<CurrentLobbyInfo>, my_id: Res<MyPlayerId>) -> Option<
     if !info.is_changed() {
         return None;
     }
-
-    info!("{:#?}", info.0);
 
     let info = &info.0;
     let lobby_title = TextView::new(&info.short.name);
@@ -358,7 +355,6 @@ fn player_slot_content(player: PlayerId) -> impl View {
             if !cache.is_changed() && !lobby.is_changed() {
                 return None;
             }
-            info!("SOMETHING CHANGED");
 
             let this_player = cache.fetch(player, &sender, &time)?;
 

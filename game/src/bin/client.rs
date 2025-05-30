@@ -49,9 +49,6 @@ fn custom_layer(_app: &mut App) -> Option<BoxedLayer> {
     )
 }
 
-#[derive(Resource)]
-struct LogFile(PathBuf);
-
 fn main() -> AppExit {
     let options = Options::parse();
 

@@ -5,27 +5,28 @@ use bevy::{
     state::app::StatesPlugin,
 };
 use clap::Parser;
-use game::network::Sess;
+use game::{
+    ingame::network::{PrivateKey, ServerOptions, PROTOCOL_ID},
+    network::Sess,
+};
 use lightyear::prelude::{ConnectToken, generate_key};
 use lobby_common::{LobbyToServer, ServerToLobby};
-use tokio::sync::mpsc;
 use wtransport::{Endpoint, Identity, ServerConfig};
-
-#[derive(clap::Parser)]
-struct Options {
-    port: u16,
-}
 
 #[tokio::main]
 async fn main() -> AppExit {
-    let options = Options::parse();
+    let options = ServerOptions::parse();
 
-    let addr = public_ip_address::perform_lookup(None).await.unwrap().ip;
+    let addr = if let Some(addr) = options.address {
+        addr
+    } else {
+        public_ip_address::perform_lookup(None).await.unwrap().ip
+    };
 
     // Wait for connection from lobby server
     let server = Endpoint::server(
         ServerConfig::builder()
-            .with_bind_default(options.port)
+            .with_bind_default(54653)
             .with_identity(
                 Identity::self_signed(["localhost", "127.0.0.1", "::1", "moba.elekrisk.com"])
                     .unwrap(),
@@ -54,7 +55,7 @@ async fn main() -> AppExit {
     for player in players {
         let token = ConnectToken::build(
             (addr, options.port),
-            0,
+            PROTOCOL_ID,
             player.id.0.as_u64_pair().0,
             private_key,
         )
@@ -81,8 +82,7 @@ async fn main() -> AppExit {
             StatesPlugin::default(),
             game::server,
         ))
+        .insert_resource(options)
+        .insert_resource(PrivateKey(private_key))
         .run()
 }
-
-// /home/elekrisk/projects/moba_try_6/game
-// /home/elekrisk/projects/moba_try_6/game

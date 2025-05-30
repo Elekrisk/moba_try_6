@@ -21,15 +21,18 @@ mod main_ui;
 pub mod network;
 pub mod new_ui;
 pub mod ui;
+pub mod ingame;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
+use lightyear::{connection::netcode::Server, prelude::{server::NetServer, ServerConnectionManager}};
 pub use network::LobbySender;
 
 pub fn client(app: &mut App) {
     common(app);
 
-    app.add_plugins((ui::client, new_ui::client, main_ui::client, network::client));
-    app.add_systems(Startup, client_setup);
+    app.add_plugins((ui::client, new_ui::client, main_ui::client, network::client, ingame::client));
+    app.add_systems(Startup, client_setup)
+        .add_systems(OnEnter(ClientState::InGame), || info!("Entered InGame state"));
 
     app.insert_state(ClientState::NotInGame);
 }
@@ -37,15 +40,19 @@ pub fn client(app: &mut App) {
 pub fn server(app: &mut App) {
     common(app);
 
-    app.add_systems(Update, |time: Res<Time>, mut exit: EventWriter<AppExit>| {
-        if time.elapsed_secs() > 5.0 {
-            exit.write(AppExit::Success);
+    app.add_plugins(ingame::server);
+
+    app.add_systems(Update, |ps: Option<Res<ServerConnectionManager>>, mut exit: EventWriter<AppExit>, time: Res<Time>| {
+        if let Some(server) = ps {
+            if server.connected_clients().next().is_none() && time.elapsed_secs() > 15.0 {
+                exit.write(AppExit::Success);
+            }
         }
     });
 }
 
 fn common(app: &mut App) {
-    app.add_plugins(r#async::common);
+    app.add_plugins((r#async::common, ingame::common));
     app.register_asset_loader(ChampionDefLoader)
         .register_asset_loader(ChampDefsLoader)
         .init_asset::<ChampionDef>()
@@ -55,6 +62,7 @@ fn common(app: &mut App) {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
+#[states(scoped_entities)]
 pub enum ClientState {
     #[default]
     NotInGame,
@@ -128,7 +136,6 @@ fn wait_for_list_load(
     mut commands: Commands,
 ) {
     for e in event.read() {
-        info!("ChampList asset event: {e:?}");
         match e {
             AssetEvent::LoadedWithDependencies { id } => {
                 let asset = assets.get(*id).unwrap();
