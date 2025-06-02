@@ -22,9 +22,6 @@ codegen-units = 1
 # Slows compile times, marginal improvements.
 lto = "thin"
 
-[patch.crates-io]
-ring = { git = "https://github.com/briansmith/ring" }
-
 [workspace.metadata.cross.target.x86_64-pc-windows-gnu]
 # Install libssl-dev:arm64, see <https://github.com/cross-rs/cross/blob/main/docs/custom_images.md#adding-dependencies-to-existing-images>
 pre-build = [
