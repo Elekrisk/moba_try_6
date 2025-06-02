@@ -1,5 +1,5 @@
 target/
 .vscode/
-.config.toml
+.cargo/config.toml
 logs/
 **/*.kra

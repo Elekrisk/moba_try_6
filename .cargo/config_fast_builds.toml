@@ -64,6 +64,25 @@
 #
 # For more information, see the blog post at <https://blog.rust-lang.org/2023/11/09/parallel-rustc.html>.
 
+# rustflags = [
+#   "--cfg",
+#   "getrandom_backend=\"wasm_js\"",
+# ]
+
+# [build]
+# target = "wasm32-unknown-unknown"
+
+[build]
+incremental = false
+
+[target.wasm32-unknown-unknown]
+rustflags = [
+  "-Zshare-generics=y",
+  "-Zthreads=0",
+  "--cfg",
+  "getrandom_backend=\"wasm_js\"",
+]
+
 [target.x86_64-unknown-linux-gnu]
 linker = "clang"
 rustflags = [
