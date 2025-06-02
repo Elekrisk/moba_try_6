@@ -5,7 +5,7 @@ use crate::ui::style::{
 };
 
 use super::{
-    BoxedView, BoxedWidget, ErasedView, View, ViewExt, Widget,
+    ErasedView, View, ViewExt, Widget,
     button::ButtonView,
     list::{ListView, ListWidget},
     stylable::{Stylable, StylableWidget},

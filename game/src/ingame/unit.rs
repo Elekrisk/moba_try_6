@@ -2,9 +2,9 @@ use core::f32;
 
 use bevy::{asset::AssetPath, prelude::*};
 use bevy_enhanced_input::prelude::*;
-use lightyear::prelude::{client::{VisualInterpolateStatus, VisualInterpolationPlugin}, *};
+use lightyear::prelude::*;
 use mlua::prelude::*;
-use vleue_navigator::{TransformedPath, prelude::*};
+use vleue_navigator::prelude::*;
 
 use crate::AppExt;
 
@@ -162,9 +162,8 @@ fn on_set_unit_movement_target(
     // mut unit: Single<&mut MovementTarget>,
     unit: Query<Entity, With<Unit>>,
     mut commands: Commands,
-    time: Res<Time>,
 ) {
-    let client = event.from();
+    // let client = event.from();
 
     // We need some way to get the currently controlled unit for this player.
     // For now, we just assume it is ALL UNITS.

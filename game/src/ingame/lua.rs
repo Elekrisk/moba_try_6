@@ -1,8 +1,6 @@
 use std::{
-    borrow::Cow,
     marker::PhantomData,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use anyhow::anyhow;
@@ -10,13 +8,8 @@ use bevy::{
     asset::{AssetLoader, AssetPath, AsyncReadExt},
     platform::collections::{HashMap, HashSet},
     prelude::*,
-    reflect::{
-        DynamicTypePath, DynamicTyped, Enum, EnumInfo, TypeInfo, UnitVariantInfo, VariantInfo,
-        reflect_remote,
-    },
 };
 use mlua::{chunk, prelude::*};
-use serde::{Deserialize, Deserializer, Serialize};
 
 use super::network::ServerOptions;
 
@@ -257,7 +250,7 @@ pub fn execute_lua(world: &mut World) {
                                         info!(" Thread reports no additional dependencies");
                                     }
                                 },
-                                Err(e) => todo!(),
+                                Err(_e) => todo!(),
                             }
                         }
                         LuaThreadStatus::Running => unreachable!(),
@@ -610,7 +603,7 @@ impl Command for ExecuteLuaScript {
 #[derive(Clone, TypePath, Asset)]
 pub struct LuaScript {
     function: LuaFunction,
-    path: PathBuf,
+    // path: PathBuf,
 }
 
 struct LuaScriptLoader {
@@ -647,7 +640,7 @@ impl AssetLoader for LuaScriptLoader {
                 .into_function()?;
             Ok(LuaScript {
                 function: script,
-                path: load_context.path().into(),
+                // path: load_context.path().into(),
             })
         }
     }
@@ -682,8 +675,6 @@ impl<T: Proto> Protos<T> {
     }
 
     pub fn get(&self, id: &str) -> LuaResult<(T, PathBuf)> {
-        let x = LuaValue::Nil;
-
         let (value, origin) = self
             .map
             .get(id)

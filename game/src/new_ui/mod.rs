@@ -1,15 +1,11 @@
 use std::fmt::Debug;
-use std::{
-    any::{Any, TypeId},
-    marker::PhantomData,
-};
+use std::any::Any;
 
-use anyhow::bail;
-use bevy::{ecs::component::ComponentId, prelude::*};
+use bevy::prelude::*;
 use scrollable::ScrollableView;
 use stylable::Stylable;
 
-use crate::ui::style::{Style, StyleLabel, StyleRef};
+use crate::ui::style::{Style, StyleRef};
 
 pub mod button;
 pub mod container;
@@ -156,7 +152,7 @@ impl View for () {
         (parent.spawn_empty().id(), parent.target_entity())
     }
 
-    fn rebuild(&mut self, prev: &Self, widget: &mut Self::Widget, commands: Commands) {}
+    fn rebuild(&mut self, _prev: &Self, _widget: &mut Self::Widget, _commands: Commands) {}
 }
 
 pub trait Widget: Any + Send + Sync {

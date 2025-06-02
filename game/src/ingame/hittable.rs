@@ -12,10 +12,10 @@ pub fn common(app: &mut App) {
 }
 
 fn kill_if_low_health(query: Query<(Entity, &Health, Option<&LuaObject>)>) {
-    for (e, hp, obj) in &query {
+    for (_e, hp, obj) in &query {
         if hp.0 <= 0.0 {}
         // Kill!
-        if let Some(obj) = obj {
+        if let Some(_obj) = obj {
             // obj.0.get()
         }
     }

@@ -1,18 +1,16 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use anyhow::bail;
 use bevy::prelude::*;
 use lobby_common::{
-    ClientToLobby, LobbyId, LobbyInfo, LobbyShortInfo, LobbyToClient, PlayerId, PlayerInfo,
+    ClientToLobby, LobbyToClient, PlayerId,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
-    io::AsyncReadExt as _,
     select,
-    sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        oneshot::Sender,
-    },
+    sync::
+        mpsc::{self, UnboundedReceiver, UnboundedSender}
+    ,
 };
 use xwt_core::{
     base::Session,
@@ -30,7 +28,7 @@ mod inner;
 #[path = "network/web.rs"]
 mod inner;
 
-pub fn client(app: &mut App) {}
+pub fn client(_app: &mut App) {}
 
 pub struct ConnectToLobbyCommand(pub String);
 

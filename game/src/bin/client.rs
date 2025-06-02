@@ -13,10 +13,9 @@ use bevy_inspector_egui::{
     bevy_egui::{EguiContext, EguiContextPass, EguiContextSettings, EguiPlugin},
     bevy_inspector::{
         self, EntityFilter,
-        hierarchy::{Hierarchy, SelectedEntities, hierarchy_ui},
+        hierarchy::{Hierarchy, SelectedEntities},
         ui_for_entities_shared_components, ui_for_entity_with_children,
     },
-    quick::WorldInspectorPlugin,
 };
 use clap::Parser;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, egui};

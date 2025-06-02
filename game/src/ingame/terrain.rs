@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use bevy::{
     asset::uuid::Uuid,
-    math::bounding::{Bounded2d, BoundingVolume},
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
@@ -244,8 +243,6 @@ struct C(f32);
 
 #[derive(Default, Resource)]
 struct SelectedTerrainObject(Option<Uuid>);
-
-struct SelectedVertex(Option<usize>);
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash, States)]
 enum EditingState {

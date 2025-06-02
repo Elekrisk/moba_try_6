@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use super::{Pod, View, Widget};
+use super::{View, Widget};
 use bevy::prelude::*;
 
 #[derive(Debug)]

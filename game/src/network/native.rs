@@ -1,32 +1,13 @@
 use bevy::prelude::*;
 
-use std::{rc::Rc, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use lobby_common::{ClientToLobby, LobbyToClient};
 use serde::{Deserialize, Serialize};
-use tokio::{
-    io::AsyncReadExt as _,
-    sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        oneshot::Sender,
-    },
-};
+use tokio::io::AsyncReadExt as _;
 use wtransport::{Connection, endpoint::endpoint_side::Client};
-use xwt_core::base::Session;
-use xwt_wtransport::wtransport::{
-    ClientConfig, Endpoint,
-    config::TlsClientConfig,
-    error::ConnectingError,
-    tls::rustls::{
-        self, DigitallySignedStruct, SignatureScheme,
-        client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
-        pki_types::CertificateDer,
-    },
-};
+use xwt_wtransport::wtransport::{ClientConfig, Endpoint};
 
-use crate::r#async::AsyncContext;
-
-use super::{LobbyMessage, Sess};
+use super::Sess;
 
 pub fn create_endpoint() -> Endpoint<Client> {
     let config = ClientConfig::builder()
@@ -52,6 +33,8 @@ pub async fn connect(address: String) -> anyhow::Result<Sess<xwt_wtransport::Con
 //     x: X,
 // }
 
+// TODO: Figure out this
+#[allow(dead_code)]
 pub trait SendMessage {
     async fn send<T: Serialize>(&self, msg: T) -> anyhow::Result<()>;
 }
@@ -64,6 +47,7 @@ impl SendMessage for Connection {
     }
 }
 
+#[allow(dead_code)]
 pub trait RecvMessage {
     async fn recv<T: for<'de> Deserialize<'de>>(&self) -> anyhow::Result<T>;
 }

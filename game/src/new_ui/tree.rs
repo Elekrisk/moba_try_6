@@ -25,7 +25,7 @@ pub struct UiFuncSystem<V: ErasedView, S: System<In = (), Out = Option<V>>>(
 // }
 
 impl<V: ErasedView, S: System<In = (), Out = Option<V>>> UiFunc for UiFuncSystem<V, S> {
-    fn run(&mut self, entity: Entity, world: &mut World) -> Option<BoxedView> {
+    fn run(&mut self, _entity: Entity, world: &mut World) -> Option<BoxedView> {
         if self.1.is_none() {
             self.1 = Some(world.register_system(self.0.take().unwrap()));
         }

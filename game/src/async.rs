@@ -3,9 +3,6 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use tokio::runtime::Runtime;
 
-#[derive(Resource)]
-pub struct TokioRuntime(tokio::runtime::Runtime);
-
 #[cfg(target_family = "wasm")]
 pub fn client(app: &mut App) {
     app.insert_resource(AsyncContext {});
@@ -41,14 +38,14 @@ impl AsyncContext {
         self.runtime.spawn(future);
     }
 
-    pub fn run_ignore<F, T>(&self, future: F)
-    where
-        F: Future<Output = T> + Send + 'static,
-    {
-        self.run(async {
-            let _ = future.await;
-        });
-    }
+    // pub fn run_ignore<F, T>(&self, future: F)
+    // where
+    //     F: Future<Output = T> + Send + 'static,
+    // {
+    //     self.run(async {
+    //         let _ = future.await;
+    //     });
+    // }
 }
 
 #[cfg(not(target_family = "wasm"))]

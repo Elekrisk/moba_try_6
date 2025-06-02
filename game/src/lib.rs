@@ -11,7 +11,7 @@
 use std::{fmt::Display, path::PathBuf};
 
 use bevy::{
-    asset::AssetLoader, ecs::bundle::{BundleEffect, DynamicBundle}, math::VectorSpace, platform::collections::HashMap, prelude::*
+    asset::AssetLoader, platform::collections::HashMap, prelude::*
 };
 
 mod r#async;
@@ -23,7 +23,7 @@ pub mod ingame;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
 use ingame::network::ServerOptions;
-use lightyear::{connection::netcode::Server, prelude::{server::NetServer, ServerConnectionManager}};
+use lightyear::prelude::ServerConnectionManager;
 pub use network::LobbySender;
 
 pub fn client(app: &mut App) {
@@ -126,7 +126,7 @@ struct ChampDefsAsset {
 }
 
 #[derive(Resource)]
-struct ChampDefsHandle(Handle<ChampDefsAsset>);
+struct ChampDefsHandle(#[allow(dead_code)] Handle<ChampDefsAsset>);
 
 #[derive(Debug, Resource)]
 struct ChampDefs {

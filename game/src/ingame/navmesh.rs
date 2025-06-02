@@ -1,11 +1,11 @@
 use std::{f32::consts::FRAC_PI_2, ops::Deref};
 
-use bevy::{asset::uuid::Uuid, platform::collections::HashMap, prelude::*, window::WindowResized};
+use bevy::{prelude::*, window::WindowResized};
 use lightyear::prelude::{AppComponentExt, ChannelDirection, ServerReplicate};
 use serde::{Deserialize, Serialize};
 use vleue_navigator::{
     prelude::{
-        CachedObstacle, ManagedNavMesh, NavMeshSettings, NavMeshStatus, NavMeshUpdateMode, NavmeshUpdaterPlugin, ObstacleSource
+        ManagedNavMesh, NavMeshSettings, NavMeshStatus, NavMeshUpdateMode, NavmeshUpdaterPlugin, ObstacleSource
     }, NavMesh, Triangulation, VleueNavigatorPlugin
 };
 
@@ -68,7 +68,6 @@ fn setup(mut commands: Commands) {
 
 fn update_terrain(
     terrain: Res<Terrain>,
-    entity_map: Local<HashMap<Uuid, Entity>>,
     terrain_data: Query<(Entity, &mut TerrainData), With<SpawnedTerrainEntity>>,
     mut commands: Commands,
 ) {
@@ -169,7 +168,7 @@ impl ObstacleSource for TerrainData {
         &self,
         obstacle_transform: &GlobalTransform,
         navmesh_transform: &Transform,
-        up: (Dir3, f32),
+        _up: (Dir3, f32),
     ) -> Vec<Vec<Vec2>> {
         info!("GETTING POLYGONS");
         let inverse = navmesh_transform.compute_affine().inverse();

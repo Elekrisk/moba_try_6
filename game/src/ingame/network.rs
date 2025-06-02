@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use lightyear::{
     client::{config::ClientConfig, plugin::ClientPlugins},
     connection::netcode::PRIVATE_KEY_BYTES,
-    prelude::{client::VisualInterpolationPlugin, server::ServerCommandsExt as _, *},
+    prelude::{server::ServerCommandsExt as _, *},
     server::{config::ServerConfig, plugin::ServerPlugins},
     shared::events::components::EntitySpawnEvent,
 };

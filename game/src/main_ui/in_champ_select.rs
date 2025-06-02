@@ -1,5 +1,4 @@
-use bevy::{asset::uuid::Uuid, prelude::*};
-use engine_common::{ChampionDef, ChampionId};
+use bevy::prelude::*;
 use lobby_common::{ClientToLobby, PlayerId, Team};
 
 use crate::{

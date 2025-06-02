@@ -1,6 +1,6 @@
 #![feature(never_type)]
 
-use std::{borrow::Borrow, collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Result, anyhow, bail};
 use lobby_common::{
@@ -278,7 +278,7 @@ mod wee {
                 self.teams.pop();
             }
             if self.teams.len() < self.settings.team_count {
-                for team in (self.teams.len()..self.settings.team_count).map(Team) {
+                for _team in (self.teams.len()..self.settings.team_count).map(Team) {
                     self.teams.push(vec![]);
                 }
             }

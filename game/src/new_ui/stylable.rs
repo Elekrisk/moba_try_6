@@ -1,7 +1,7 @@
 use anyhow::bail;
 use bevy::prelude::*;
 
-use crate::ui::style::{ConditionalStyle, Style, StyleLabel, StyleRef};
+use crate::ui::style::{ConditionalStyle, Style, StyleRef};
 
 use super::{View, Widget};
 
@@ -35,10 +35,10 @@ impl<V: View> Stylable<V> {
 }
 
 impl<V: View> Stylable<V> {
-    fn style_ref(&mut self, label: impl StyleLabel) -> &mut Self {
-        self.style_ref = StyleRef::new(label);
-        self
-    }
+    // fn style_ref(&mut self, label: impl StyleLabel) -> &mut Self {
+    //     self.style_ref = StyleRef::new(label);
+    //     self
+    // }
 
     pub fn style<T: Reflect + TypePath>(
         &mut self,

@@ -1,9 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use bevy::{
-    asset::{AssetLoader, AsyncReadExt},
+    asset::AssetLoader,
     ecs::system::RunSystemOnce,
-    platform::collections::HashMap,
     prelude::*,
 };
 use bevy_enhanced_input::{
@@ -18,14 +17,13 @@ use lightyear::prelude::{
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{AppExt, ClientState};
+use crate::AppExt;
 
 use super::{
     lua::{
-        AppLuaExt, CurrentScriptPath, ExecuteLuaScript, LuaCtx, LuaExt, LuaScript,
+        AppLuaExt, ExecuteLuaScript, LuaCtx, LuaExt, LuaScript,
         LuaScriptRunningContext, Protos, ScriptCompleted,
     },
-    navmesh::SpawnedTerrainEntity,
     terrain::Terrain,
 };
 
@@ -61,8 +59,7 @@ pub fn common(app: &mut App) {
             .add_observer(bind_input)
             .add_observer(
                 |_: Trigger<Fired<ReloadMap>>,
-                 mut mgr: ResMut<ClientConnectionManager>,
-                 mut commands: Commands| {
+                 mut mgr: ResMut<ClientConnectionManager>| {
                     // commands.queue(UnloadMap);
                     // commands.queue(ResetRegistrations);
                     // commands.queue(LoadMap("default".into()));
@@ -331,8 +328,6 @@ pub struct FloorPlaneArgs {
 struct CurrentMapHandle(Handle<MapDefAsset>);
 
 fn spawn_default_map(
-    asset_server: Res<AssetServer>,
-    mut mgr: ResMut<ServerConnectionManager>,
     mut commands: Commands,
 ) {
     let load_map = LoadMap("default".into());

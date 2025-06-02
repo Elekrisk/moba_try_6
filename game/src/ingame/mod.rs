@@ -1,4 +1,3 @@
-use std::net::IpAddr;
 
 use bevy::prelude::*;
 use lightyear::{
@@ -6,9 +5,7 @@ use lightyear::{
     prelude::{
         ClientDisconnectEvent, ConnectToken,
         client::{self, Authentication, ClientCommandsExt},
-        server::{self, ServerCommandsExt},
     },
-    server::config::ServerConfig,
 };
 
 use crate::ClientState;

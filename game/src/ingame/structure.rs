@@ -1,7 +1,5 @@
-use std::path::{Path, PathBuf};
 
-use anyhow::anyhow;
-use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*, ui::experimental::GhostNode};
+use bevy::{asset::AssetPath, prelude::*};
 use lightyear::prelude::{AppComponentExt, ChannelDirection, ServerReplicate};
 use lobby_common::Team;
 use mlua::prelude::*;
@@ -68,7 +66,7 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
             
             let (proto, path) = world.resource::<Protos<StructProto>>().get(&args.proto)?;
 
-            let asset_server = world.resource::<AssetServer>().clone();
+            // let asset_server = world.resource::<AssetServer>().clone();
 
             // let path_rel = lua.path_rel(&proto.model.path(), path);
             // let mut path = AssetPath::from(path_rel);

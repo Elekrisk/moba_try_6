@@ -1,9 +1,9 @@
-use std::{hash::Hash, marker::PhantomData};
+use std::marker::PhantomData;
 
 use bevy::{
-    platform::collections::{Equivalent, HashMap},
+    platform::collections::HashMap,
     prelude::*,
-    reflect::{DynamicStruct, ParsedPath},
+    reflect::DynamicStruct,
 };
 
 pub fn client(app: &mut App) {

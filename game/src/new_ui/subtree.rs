@@ -1,5 +1,4 @@
 pub use bevy::prelude::*;
-use bevy::{ecs::query::QueryData, ui::experimental::GhostNode};
 
 use super::{
     View, Widget,

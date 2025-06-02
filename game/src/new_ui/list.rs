@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use super::{BoxedView, BoxedWidget, ErasedView, Pod, View, Widget};
+use super::{BoxedView, BoxedWidget, ErasedView, View, Widget};
 
 #[derive(Debug)]
 pub struct ListView {

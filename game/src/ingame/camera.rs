@@ -1,10 +1,10 @@
 use bevy::{
     prelude::*,
-    window::{CursorGrabMode, PrimaryWindow},
+    window::PrimaryWindow,
 };
 use bevy_enhanced_input::prelude::{ActionState, *};
 
-use crate::{ClientState, client_setup};
+use crate::client_setup;
 
 pub fn client(app: &mut App) {
     app.init_resource::<MousePos>()
@@ -35,7 +35,7 @@ fn setup_camera(camera: Single<Entity, With<Camera>>, mut commands: Commands) {
     commands.spawn(actions).observe(zoom_camera);
 }
 
-fn lock_mouse(mut window: Single<&mut Window, With<PrimaryWindow>>) {
+fn lock_mouse(_window: Single<&mut Window, With<PrimaryWindow>>) {
 //     info!("Locking cursor");
 //     window.cursor_options.grab_mode = CursorGrabMode::Confined;
 }

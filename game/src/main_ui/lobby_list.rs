@@ -1,4 +1,4 @@
-use bevy::{ecs::spawn::SpawnIter, prelude::*};
+use bevy::prelude::*;
 use engine_common::ChampionId;
 use lightyear::prelude::ConnectToken;
 use lobby_common::{
@@ -7,9 +7,14 @@ use lobby_common::{
 use tokio::sync::mpsc::error::TryRecvError;
 
 use crate::{
-    ingame::ConnectToGameServer, main_ui::ConnectionState, network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender}, new_ui::{
-        button::ButtonView, list::ListView, subtree::SubtreeView, text::TextView, tree::IfRunner, View, ViewExt
-    }, LobbyMode, Options
+    LobbyMode, Options,
+    ingame::ConnectToGameServer,
+    main_ui::ConnectionState,
+    network::{LobbyConnectionFailed, LobbyMessage, LobbyReceiver, LobbySender},
+    new_ui::{
+        View, ViewExt, button::ButtonView, list::ListView, subtree::SubtreeView, text::TextView,
+        tree::IfRunner,
+    },
 };
 
 use super::{LobbyMenuState, in_champ_select::champ_select2, in_lobby::lobby_ui2, send_msg};
@@ -22,6 +27,8 @@ pub fn client(app: &mut App) {
 
 macro events($($name:ident $(($($tt:tt)*))?;)*) {
     $(
+
+        #[allow(dead_code)]
         #[derive(Event)]
         pub struct $name $(($($tt)*))?;
     )*
@@ -40,6 +47,7 @@ events! {
 #[derive(Event)]
 pub struct LobbyConnectionLost;
 #[derive(Event)]
+#[allow(dead_code)]
 pub struct LobbyListReceived(pub Vec<LobbyShortInfo>);
 #[derive(Event)]
 pub struct LobbyInfoReceived(pub LobbyInfo);
@@ -48,8 +56,10 @@ pub struct WeJoinedLobby(pub LobbyId);
 #[derive(Event)]
 pub struct WeLeftLobby;
 #[derive(Event)]
+#[allow(dead_code)]
 pub struct PlayerJoinedLobby(pub PlayerId);
 #[derive(Event)]
+#[allow(dead_code)]
 pub struct PlayerLeftLobby(pub PlayerId);
 #[derive(Event)]
 pub struct PlayerInfoReceived(pub PlayerInfo);
