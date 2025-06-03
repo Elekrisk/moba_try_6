@@ -1,25 +1,28 @@
-
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{ecs::entity::MapEntities, platform::collections::HashMap, prelude::*};
 use engine_common::ChampionId;
 use lightyear::{
-    client::config::ClientConfig, prelude::{ClientId,
-        client::{self, Authentication, ClientCommandsExt}, ClientDisconnectEvent, ConnectToken
-    }
+    client::config::ClientConfig,
+    prelude::{
+        AppResourceExt, ClientDisconnectEvent, ClientId, ConnectToken, ReplicateResourceExt,
+        client::{self, Authentication, ClientCommandsExt},
+    },
 };
 use lobby_common::{PlayerId, Team};
+use serde::{Deserialize, Serialize};
 
-use crate::ClientState;
+use crate::{GameState, ingame::map::MessageChannel};
 
 #[macro_use]
 pub mod lua;
 pub mod camera;
-pub mod hittable;
+pub mod targetable;
+pub mod loading;
 pub mod map;
+pub mod navmesh;
 pub mod network;
 pub mod structure;
 pub mod terrain;
 pub mod unit;
-pub mod navmesh;
 
 pub fn client(app: &mut App) {
     app.add_plugins((network::client, camera::client, terrain::client))
@@ -36,12 +39,19 @@ pub fn common(app: &mut App) {
         lua::common,
         network::common,
         map::common,
-        hittable::common,
+        targetable::common,
         structure::common,
         terrain::common,
         navmesh::common,
         unit::common,
+        loading::plugin,
     ));
+
+    app.register_resource::<Players>(lightyear::prelude::ChannelDirection::ServerToClient);
+    app.add_systems(Startup, |mut commands: Commands| {
+        commands
+            .replicate_resource::<Players, MessageChannel>(lightyear::prelude::NetworkTarget::All);
+    });
 }
 
 pub struct ConnectToGameServer(pub ConnectToken);
@@ -56,26 +66,42 @@ impl Command for ConnectToGameServer {
         *auth = Authentication::Token(self.0);
 
         world.connect_client();
-        world.commands().set_state(ClientState::InGame);
+        world.commands().set_state(GameState::Loading);
     }
 }
 
 fn on_disconnect(mut events: EventReader<ClientDisconnectEvent>, mut commands: Commands) {
     for event in events.read() {
         info!("Disconnect: {event:?}");
-        commands.set_state(ClientState::NotInGame);
+        commands.set_state(GameState::NotInGame);
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Players {
     pub players: HashMap<PlayerId, InGamePlayerInfo>,
 }
 
+impl MapEntities for Players {
+    fn map_entities<E: EntityMapper>(&mut self, entity_mapper: &mut E) {
+        for info in self.players.values_mut() {
+            info.map_entities(entity_mapper);
+        }
+    }
+}
+
+#[derive(Resource, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InGamePlayerInfo {
     pub id: PlayerId,
     pub client_id: ClientId,
+    pub name: String,
     pub team: Team,
     pub champion: ChampionId,
     pub controlled_unit: Option<Entity>,
+}
+
+impl MapEntities for InGamePlayerInfo {
+    fn map_entities<E: EntityMapper>(&mut self, entity_mapper: &mut E) {
+        self.controlled_unit = self.controlled_unit.map(|e| entity_mapper.get_mapped(e));
+    }
 }

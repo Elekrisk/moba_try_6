@@ -34,7 +34,6 @@ pub struct ConnectToLobbyCommand(pub String);
 
 impl Command for ConnectToLobbyCommand {
     fn apply(self, world: &mut World) {
-        info!("Starting to connect...");
         world
             .run_system_cached_with(connect_to_lobby_server, self.0)
             .unwrap();
@@ -75,21 +74,16 @@ async fn connect(
 ) -> anyhow::Result<()> {
     match inner::connect(address).await {
         Ok(connection) => {
-            info!("Sending application handshake...");
             connection
                 .send(ClientToLobby::Handshake {
                     name: whoami::username(),
                 })
                 .await
                 .unwrap();
-            info!("Application handshake sent");
-            info!("Waiting for hanshake response...");
             let LobbyToClient::Handshake { id } = connection.recv::<LobbyToClient>().await.unwrap()
             else {
                 bail!("Invalid handshake");
             };
-            info!("Handshake response received");
-            info!("My id: {id:?}");
             send_internal.send(LobbyMessage::LobbyConnected(id))?;
 
             loop {

@@ -1,5 +1,5 @@
 ChampionDef(
-    id: ChampionId("55c9770a-6362-4e9e-99e8-cd25580e2aa4"),
+    id: ChampionId("example_champion"),
     name: "Example Champion",
     icon: "champs/unknown.png",
 )

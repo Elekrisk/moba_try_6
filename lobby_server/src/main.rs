@@ -1,6 +1,6 @@
 #![feature(never_type)]
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, ops::{Deref, Range, RangeInclusive}, path::PathBuf, str::FromStr};
 
 use anyhow::{Result, anyhow, bail};
 use lobby_common::{
@@ -25,6 +25,36 @@ struct Options {
     certificate: Option<PathBuf>,
     #[arg(long)]
     privkey: Option<PathBuf>,
+    internal_ports: W<RangeInclusive<u16>>,
+    external_ports: W<RangeInclusive<u16>>,
+}
+
+#[derive(Clone, Copy)]
+struct W<T>(T);
+
+impl<T> Deref for W<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromStr for W<RangeInclusive<u16>> {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.parse::<u16>() {
+            Ok(x) => Ok(W(x..=x)),
+            Err(_) => match s.split_once('-') {
+                Some((a, b)) => match (a.parse(), b.parse()) {
+                    (Ok(a), Ok(b)) => Ok(W(a..=b)),
+                    _ => bail!("expected port (e.g. 4545) or port range (e.g. 4545-4555)")
+                },
+                _ => bail!("expected port (e.g. 4545) or port range (e.g. 4545-4555)")
+            }
+        }
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -35,6 +65,8 @@ enum InternalMessage {
         message: ClientToLobby,
     },
     PlayerDisconnected(PlayerId),
+    InternalPortReleased(u16),
+    ExternalPortReleased(u16),
     GameServerClosed(LobbyId),
     GameTokenCreated(PlayerId, Vec<u8>),
 }
@@ -51,7 +83,7 @@ async fn main() {
 
     let options = Options::parse();
 
-    let identity = match (options.certificate, options.privkey) {
+    let identity = match (&options.certificate, &options.privkey) {
         (Some(cert_pemfile), Some(private_key_pemfile)) => {
             println!("Using cert from disk");
             Identity::load_pemfiles(cert_pemfile, private_key_pemfile)
@@ -88,7 +120,7 @@ async fn main() {
         }
     });
 
-    let mut state = State::new(sender);
+    let mut state = State::new(sender, options);
 
     loop {
         match state.handle(&mut r).await {
@@ -340,19 +372,25 @@ mod wee {
     }
 
     pub struct State {
+        options: Options,
         players: HashMap<PlayerId, Player>,
         used_player_names: HashSet<String>,
         lobbies: HashMap<LobbyId, Lobby>,
         sender: UnboundedSender<InternalMessage>,
+        used_internal_ports: HashSet<u16>,
+        used_external_ports: HashSet<u16>,
     }
 
     impl State {
-        pub fn new(sender: UnboundedSender<InternalMessage>) -> Self {
+        pub fn new(sender: UnboundedSender<InternalMessage>, options: Options) -> Self {
             Self {
+                options,
                 players: HashMap::new(),
                 used_player_names: HashSet::new(),
                 lobbies: HashMap::new(),
                 sender,
+                used_internal_ports: HashSet::new(),
+                used_external_ports: HashSet::new(),
             }
         }
 
@@ -400,6 +438,12 @@ mod wee {
                 InternalMessage::GameTokenCreated(player_id, token) => {
                     _ = self.send_message(player_id, LobbyToClient::GameStarted(token));
                 }
+                InternalMessage::InternalPortReleased(port) => {
+                    self.used_internal_ports.remove(&port);
+                },
+                InternalMessage::ExternalPortReleased(port) => {
+                    self.used_external_ports.remove(&port);
+                },
             }
 
             Ok(())
@@ -661,14 +705,14 @@ mod wee {
                             .selected_champs
                             .entry(player_id)
                             .or_insert(ChampionSelection {
-                                id: ChampionId(Uuid::nil()),
+                                id: ChampionId(String::new()),
                                 locked: false,
                             });
                     if entry.locked {
                         bail!("Cannot change locked selection");
                     }
 
-                    entry.id = champ;
+                    entry.id = champ.clone();
 
                     _ = self.broadcast_message(
                         lobby_id,
@@ -809,10 +853,31 @@ mod wee {
             }
 
             println!("Starting game server...");
+
+            let Some(internal_port) = self.options.internal_ports.0.clone().find(|p| !self.used_internal_ports.contains(p)) else {
+                _ = self.sender.send(InternalMessage::GameServerClosed(lobby_id));
+                bail!("No internal port available");
+            };
+            let Some(external_port) = self.options.external_ports.0.clone().find(|p| !self.used_external_ports.contains(p)) else {
+                _ = self.sender.send(InternalMessage::GameServerClosed(lobby_id));
+                bail!("No external port available");
+            };
+
             // Start game in some way
             let mut child = Command::new("cargo")
-                .args(["run", "--bin=server", "--", "--address", "127.0.0.1", "54655"])
+                .args([
+                    "run",
+                    "--bin=server",
+                    "--",
+                    "--address",
+                    "127.0.0.1",
+                    &internal_port.to_string(),
+                    &external_port.to_string(),
+                ])
                 .spawn()?;
+
+            self.used_internal_ports.insert(internal_port);
+            self.used_external_ports.insert(external_port);
 
             lobby.lobby_state = LobbyState::InGame;
 
@@ -824,10 +889,13 @@ mod wee {
                 println!("Child just exited!");
 
                 _ = sender.send(InternalMessage::GameServerClosed(lobby_id));
+                _ = sender.send(InternalMessage::InternalPortReleased(internal_port));
+                _ = sender.send(InternalMessage::ExternalPortReleased(external_port));
             });
 
             let settings = lobby.settings.clone();
             let lobby = &*lobby;
+            let players = &self.players;
             let players = lobby
                 .teams
                 .iter()
@@ -835,8 +903,9 @@ mod wee {
                 .flat_map(|(i, p)| {
                     p.iter().map(move |p| PlayerGameInfo {
                         id: *p,
+                        name: players.get(p).unwrap().name.clone(),
                         team: Team(i),
-                        champ: lobby.selected_champs.get(p).unwrap().id,
+                        champ: lobby.selected_champs.get(p).unwrap().id.clone(),
                     })
                 })
                 .collect();
@@ -852,19 +921,20 @@ mod wee {
                         .build(),
                 )
                 .unwrap()
-                .connect("https://localhost:54653")
+                .connect(format!("https://localhost:{internal_port}"))
                 .await
                 .unwrap();
                 conn.send(LobbyToServer::Handshake { settings, players })
                     .await
                     .unwrap();
                 let ServerToLobby::PlayerTokens { tokens } = conn.recv().await.unwrap();
-
+                conn.close(0u8.into(), &[]);
                 for (player, token) in tokens {
                     sender
                         .send(InternalMessage::GameTokenCreated(player, token))
                         .unwrap();
                 }
+                _ = sender.send(InternalMessage::InternalPortReleased(internal_port));
             });
 
             Ok(())

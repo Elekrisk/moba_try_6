@@ -6,10 +6,10 @@ use std::{
 use anyhow::anyhow;
 use bevy::{
     asset::{AssetLoader, AssetPath, AsyncReadExt},
-    platform::collections::{HashMap, HashSet},
+    platform::collections::HashMap,
     prelude::*,
 };
-use mlua::{chunk, prelude::*};
+use mlua::prelude::*;
 
 use super::network::ServerOptions;
 
@@ -145,145 +145,8 @@ macro_rules! proto {
 #[derive(Resource, Deref)]
 pub struct LuaCtx(pub Lua);
 
-/// Contains data needed for the lua script running system to work.
-///
-/// Only supports running scripts once; trying to run one multiple times
-/// may not work correctly. The scripts themselves are ment to be "registration scripts",
-/// which registers functions to be ran on engine events.
-#[derive(Default, Resource)]
-pub struct LuaScriptRunningContext {
-    /// Scripts that are yet to be loaded
-    waiting_for_load: HashSet<Handle<LuaScript>>,
-    /// All scripts that have been loaded and executed.
-    loaded_and_executed: HashSet<Handle<LuaScript>>,
-    /// Scripts that are waiting for another script to complete.
-    waiting_for_others: Vec<ThreadInfo>,
-    /// Scripts that are ready to be ran.
-    currently_running: Vec<ThreadInfo>,
-}
-
-struct ThreadInfo {
-    handle: Handle<LuaScript>,
-    thread: LuaThread,
-    /// A list of the scripts that need to complete before this script can run.
-    ///
-    /// Needed so that scripts may assume that other scripts have already registered their stuff.
-    dependencies: Vec<Handle<LuaScript>>,
-}
-
 #[derive(Event)]
 pub struct ScriptCompleted(pub Handle<LuaScript>);
-
-pub fn execute_lua(world: &mut World) {
-    let lua = world.resource::<LuaCtx>().0.clone();
-
-    let mut ctx = world.resource_mut::<LuaScriptRunningContext>();
-    // world.resource_scope(|world, mut ctx: Mut<'_, LuaScriptRunningContext>| {
-    let mut i = 0;
-
-    let mut newly_completed = vec![];
-
-    // We should loop and run until we reach a stale state;
-    // i.e. we have run out of currently running threads and none completed last loop
-    loop {
-        // First, check if any waiting threads can be started
-        while i < ctx.waiting_for_others.len() {
-            let thread_info = &ctx.waiting_for_others[i];
-            if thread_info
-                .dependencies
-                .iter()
-                .all(|h| ctx.loaded_and_executed.contains(h))
-            {
-                // Move to running queue
-                let thread_info = ctx.waiting_for_others.remove(i);
-                ctx.currently_running.push(thread_info);
-            } else {
-                i += 1;
-            }
-        }
-
-        if ctx.currently_running.is_empty() {
-            // No threads to run, and as such, no way for any dependencies to complete
-            break;
-        }
-
-        // Loop through all running threads and resume them
-        while !ctx.currently_running.is_empty() {
-            i = 0;
-            while i < ctx.currently_running.len() {
-                let thread_info = &ctx.currently_running[i];
-
-                let thread = thread_info.thread.clone();
-                info!("Running thread {:?}", thread_info.handle.path());
-
-                lua.set_path(thread_info.handle.path().unwrap().path().into());
-                let resume_result = lua.with_world(world, |_| thread.resume::<LuaValue>(()));
-                lua.reset_path();
-
-                ctx = world.resource_mut::<LuaScriptRunningContext>();
-                let thread_info = &ctx.currently_running[i];
-                match resume_result {
-                    Ok(value) => match thread_info.thread.status() {
-                        LuaThreadStatus::Resumable => {
-                            // The thread isn't finished yet, which means that it
-                            // returned an object which tells us when to resume the thread.
-                            match ResumeCondition::from_lua(value, &lua) {
-                                Ok(cond) => match cond {
-                                    ResumeCondition::AfterDependencyLoaded(handle) => {
-                                        info!(" Thread reports dependency {:?}", handle.path());
-                                        // Is this dependency already loaded?
-                                        if ctx.loaded_and_executed.contains(&handle) {
-                                            // We don't need to even add the dependency to the thread info; just continue
-                                            // By not incrementing the index, this thread will be ran again
-                                            info!(
-                                                "  That dependency is already fulfilled; continuing"
-                                            );
-                                        } else {
-                                            // We need to load and execute the dependency
-                                            info!("  Waiting for dependency; going to next");
-                                            let mut thread_info = ctx.currently_running.remove(i);
-                                            thread_info.dependencies.push(handle);
-                                            ctx.waiting_for_others.push(thread_info);
-                                        }
-                                    }
-                                    ResumeCondition::Immediately => {
-                                        info!(" Thread reports no additional dependencies");
-                                    }
-                                },
-                                Err(_e) => todo!(),
-                            }
-                        }
-                        LuaThreadStatus::Running => unreachable!(),
-                        LuaThreadStatus::Finished => {
-                            info!(" Thread finished");
-                            let thread_info = ctx.currently_running.remove(i);
-                            newly_completed.push(thread_info.handle.clone());
-                            ctx.loaded_and_executed.insert(thread_info.handle);
-                        }
-                        LuaThreadStatus::Error => unreachable!(),
-                    },
-                    Err(e) => {
-                        error!("Lua error: {e}");
-                        ctx.currently_running.remove(i);
-                    }
-                }
-            }
-        }
-    }
-
-    for handle in newly_completed {
-        world.trigger(ScriptCompleted(handle));
-    }
-    // });
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, FromLua)]
-enum ResumeCondition {
-    AfterDependencyLoaded(Handle<LuaScript>),
-    Immediately,
-}
-
-impl LuaUserData for ResumeCondition {}
 
 struct IsServer(bool);
 
@@ -293,15 +156,12 @@ pub fn common(app: &mut App) {
     let is_server = IsServer(app.world().contains_resource::<ServerOptions>());
     lua.set_app_data(is_server);
 
-    info!("I am server: {}", lua.is_server());
-
     app.insert_resource(LuaCtx(lua.clone()))
         .init_resource::<ScriptInfoMap>()
-        .init_resource::<LuaScriptRunningContext>()
         .register_asset_loader(LuaScriptLoader { lua })
         .init_asset::<LuaScript>()
         .setup_lua(setup_lua)
-        .add_systems(Update, (wait_for_script_load, execute_lua).chain());
+        ;
 }
 
 #[derive(Resource, Default, Debug, Reflect)]
@@ -314,86 +174,10 @@ pub struct ScriptInfo {
     executed: bool,
 }
 
-fn setup_lua(lua: &Lua) -> LuaResult<()> {
-    let ensure_loaded_rust = lua.create_function(|lua: &Lua, path: PathBuf| {
-        let path = lua.path(&path);
-        // Check if path is loaded
-        let mut world = lua.world();
-        let handle =
-            if let Some(handle) = world.resource::<AssetServer>().get_handle(path.as_path()) {
-                handle
-            } else {
-                world.resource::<AssetServer>().load(path)
-            };
+fn setup_lua(_lua: &Lua) -> LuaResult<()> {
 
-        let ctx = world.resource::<LuaScriptRunningContext>();
-        // Has this already been executed?
-        if ctx.loaded_and_executed.contains(&handle) {
-            // Then we don't need to yield, but it is easiest to it anyway
-            return lua.create_userdata(ResumeCondition::Immediately);
-        }
-        // Is this script running, or is waiting to run?
-        if ctx
-            .currently_running
-            .iter()
-            .chain(&ctx.waiting_for_others)
-            .any(|ti| ti.handle == handle)
-        {
-            // Then we need to wait for it to be completed
-            return lua.create_userdata(ResumeCondition::AfterDependencyLoaded(handle));
-        }
-        // The script is not running, we need to start it
-        // The ExecuteLuaScript command will handle if the script is loaded or not
-        ExecuteLuaScript::new(handle.clone())
-            // .immediately()
-            .apply(&mut world);
-
-        lua.create_userdata(ResumeCondition::AfterDependencyLoaded(handle))
-    })?;
-
-    let ensure_loaded = lua
-        .load(chunk! {
-            function(path)
-                local cont = $ensure_loaded_rust (path)
-                coroutine.yield(cont)
-            end
-        })
-        .eval::<LuaFunction>()?;
-
-    // let ensure_loaded = lua.create_function(|lua, path: PathBuf| {
-    //     info!("Running ENSURE_LOADED");
-    //     let path = lua.path(&path);
-    //     let handle = lua.world().resource::<AssetServer>().load(path.as_ref());
-    //     lua.world().commands().queue(ExecuteLuaScript(handle));
-    //     lua.world().flush();
-    //     Ok(())
-    // })?;
-
-    lua.table("game")?.set("ensure_loaded", ensure_loaded)?;
     Ok(())
 }
-
-fn wait_for_script_load(
-    mut events: EventReader<AssetEvent<LuaScript>>,
-    ctx: Res<LuaScriptRunningContext>,
-    asset_server: Res<AssetServer>,
-    mut commands: Commands,
-) {
-    for e in events.read() {
-        match e {
-            AssetEvent::LoadedWithDependencies { id } => {
-                if let Some(handle) = asset_server.get_id_handle(*id)
-                    && ctx.waiting_for_load.contains(&handle)
-                {
-                    // We are waiting for this script and should execute it
-                    commands.queue(ExecuteLuaScript::new(handle.clone()).immediately());
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 // #[derive(Component)]
 // pub struct LuaObject(pub LuaTable);
 
@@ -538,71 +322,71 @@ impl AssetPathExt for AssetPath<'static> {
     }
 }
 
-pub struct ExecuteLuaScript(pub Handle<LuaScript>, pub bool);
+// pub struct ExecuteLuaScript(pub Handle<LuaScript>, pub bool);
 
-impl ExecuteLuaScript {
-    pub fn new(handle: Handle<LuaScript>) -> Self {
-        Self(handle, false)
-    }
+// impl ExecuteLuaScript {
+//     pub fn new(handle: Handle<LuaScript>) -> Self {
+//         Self(handle, false)
+//     }
 
-    pub fn immediately(mut self) -> Self {
-        self.1 = true;
-        self
-    }
-}
+//     pub fn immediately(mut self) -> Self {
+//         self.1 = true;
+//         self
+//     }
+// }
 
 pub struct CurrentScriptPath(pub PathBuf);
 
-impl Command for ExecuteLuaScript {
-    fn apply(self, world: &mut World) -> () {
-        if let Some(script) = world.resource::<Assets<LuaScript>>().get(&self.0) {
-            // let script = script.clone();
-            let lua = &world.resource::<LuaCtx>().0;
+// impl Command for ExecuteLuaScript {
+//     fn apply(self, world: &mut World) -> () {
+//         if let Some(script) = world.resource::<Assets<LuaScript>>().get(&self.0) {
+//             // let script = script.clone();
+//             let lua = &world.resource::<LuaCtx>().0;
 
-            // world
-            //     .resource_mut::<ScriptInfoMap>()
-            //     .map
-            //     .entry(self.0.clone())
-            //     .or_default()
-            //     .executed = true;
+//             // world
+//             //     .resource_mut::<ScriptInfoMap>()
+//             //     .map
+//             //     .entry(self.0.clone())
+//             //     .or_default()
+//             //     .executed = true;
 
-            // let world_val = std::mem::take(world);
-            // lua.set_app_data(world_val);
-            // lua.set_app_data(CurrentScriptPath(script.path));
-            // match script.function.call::<()>(()) {
-            //     Ok(_) => {}
-            //     Err(e) => error!("Lua error: {e}"),
-            // }
-            // *world = lua.remove_app_data().unwrap();
-            let thread_info = ThreadInfo {
-                handle: self.0.clone(),
-                thread: match lua.create_thread(script.function.clone()) {
-                    Ok(val) => val,
-                    Err(e) => {
-                        error!("Lua error: {e}");
-                        return;
-                    }
-                },
-                dependencies: vec![],
-            };
-            let mut ctx = world.resource_mut::<LuaScriptRunningContext>();
-            ctx.currently_running.push(thread_info);
+//             // let world_val = std::mem::take(world);
+//             // lua.set_app_data(world_val);
+//             // lua.set_app_data(CurrentScriptPath(script.path));
+//             // match script.function.call::<()>(()) {
+//             //     Ok(_) => {}
+//             //     Err(e) => error!("Lua error: {e}"),
+//             // }
+//             // *world = lua.remove_app_data().unwrap();
+//             let thread_info = ThreadInfo {
+//                 handle: self.0.clone(),
+//                 thread: match lua.create_thread(script.function.clone()) {
+//                     Ok(val) => val,
+//                     Err(e) => {
+//                         error!("Lua error: {e}");
+//                         return;
+//                     }
+//                 },
+//                 dependencies: vec![],
+//             };
+//             let mut ctx = world.resource_mut::<LuaScriptRunningContext>();
+//             ctx.currently_running.push(thread_info);
 
-            if self.1 {
-                // Run scripts NOW also
-                execute_lua(world);
-            }
-        } else {
-            // error!("Script not loaded!");
-            let mut ctx = world.resource_mut::<LuaScriptRunningContext>();
-            ctx.waiting_for_load.insert(self.0.clone());
-        }
-    }
-}
+//             if self.1 {
+//                 // Run scripts NOW also
+//                 execute_lua(world);
+//             }
+//         } else {
+//             // error!("Script not loaded!");
+//             let mut ctx = world.resource_mut::<LuaScriptRunningContext>();
+//             ctx.waiting_for_load.insert(self.0.clone());
+//         }
+//     }
+// }
 
 #[derive(Clone, TypePath, Asset)]
 pub struct LuaScript {
-    function: LuaFunction,
+    pub function: LuaFunction,
     // path: PathBuf,
 }
 
@@ -646,7 +430,7 @@ impl AssetLoader for LuaScriptLoader {
     }
 
     fn extensions(&self) -> &[&str] {
-        &["ron"]
+        &["lua"]
     }
 }
 

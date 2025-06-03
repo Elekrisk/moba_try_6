@@ -131,6 +131,7 @@ pub enum ServerToLobby {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlayerGameInfo {
     pub id: PlayerId,
+    pub name: String,
     pub team: Team,
     pub champ: ChampionId,
 }

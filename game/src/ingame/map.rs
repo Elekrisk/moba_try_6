@@ -1,10 +1,6 @@
 use std::path::PathBuf;
 
-use bevy::{
-    asset::AssetLoader,
-    ecs::system::RunSystemOnce,
-    prelude::*,
-};
+use bevy::{asset::AssetLoader, ecs::system::RunSystemOnce, prelude::*};
 use bevy_enhanced_input::{
     events::Fired,
     prelude::{Actions, Binding, InputAction, InputContext, InputContextAppExt, JustPress},
@@ -20,10 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::AppExt;
 
 use super::{
-    lua::{
-        AppLuaExt, ExecuteLuaScript, LuaCtx, LuaExt, LuaScript,
-        LuaScriptRunningContext, Protos, ScriptCompleted,
-    },
+    lua::{AppLuaExt, LuaCtx, LuaExt, LuaScript, Protos, ScriptCompleted},
     terrain::Terrain,
 };
 
@@ -35,9 +28,6 @@ pub fn common(app: &mut App) {
 
     app.register_component::<MapEntity>(lightyear::prelude::ChannelDirection::ServerToClient);
 
-    app.register_message::<UnloadMap>(lightyear::prelude::ChannelDirection::Bidirectional);
-    app.register_message::<ResetRegistrations>(lightyear::prelude::ChannelDirection::Bidirectional);
-    app.register_message::<LoadMap>(lightyear::prelude::ChannelDirection::Bidirectional);
     app.add_channel::<MessageChannel>(lightyear::prelude::ChannelSettings {
         mode: lightyear::prelude::ChannelMode::OrderedReliable(ReliableSettings::default()),
         ..default()
@@ -47,48 +37,26 @@ pub fn common(app: &mut App) {
     if app.is_client() {
         // app.add_systems(OnEnter(ClientState::InGame), spawn_default_map)
         app.add_input_context::<MapControlContext>()
-            .add_systems(
-                Update,
-                (
-                    on_unload_map_client.run_if(resource_exists::<ClientConnectionManager>),
-                    on_reset_registration_client.run_if(resource_exists::<ClientConnectionManager>),
-                    on_load_map_client.run_if(resource_exists::<ClientConnectionManager>),
-                )
-                    .chain(),
-            )
             .add_observer(bind_input)
             .add_observer(
                 |_: Trigger<Fired<ReloadMap>>,
-                 mut mgr: ResMut<ClientConnectionManager>| {
+                //  mut mgr: ResMut<ClientConnectionManager>
+                 | {
                     // commands.queue(UnloadMap);
                     // commands.queue(ResetRegistrations);
                     // commands.queue(LoadMap("default".into()));
-                    mgr.send_message::<MessageChannel, _>(&UnloadMap).unwrap();
-                    mgr.send_message::<MessageChannel, _>(&ResetRegistrations)
-                        .unwrap();
-                    mgr.send_message::<MessageChannel, _>(&LoadMap("default".into()))
-                        .unwrap();
+                    // mgr.send_message::<MessageChannel, _>(&UnloadMap).unwrap();
+                    // mgr.send_message::<MessageChannel, _>(&ResetRegistrations)
+                    //     .unwrap();
+                    // mgr.send_message::<MessageChannel, _>(&LoadMap("default".into()))
+                    //     .unwrap();
                 },
             )
             .add_systems(Startup, |mut commands: Commands| {
                 commands.spawn(Actions::<MapControlContext>::default());
             });
     } else {
-        app.add_systems(Startup, spawn_default_map).add_systems(
-            Update,
-            (
-                on_client_connect,
-                on_unload_map_server,
-                on_reset_registration_server,
-                on_load_map_server,
-            )
-                .chain(),
-        );
     }
-    app.add_systems(
-        Update,
-        wait_for_map_load.run_if(resource_exists::<CurrentMapHandle>),
-    );
 }
 
 pub struct MessageChannel;
@@ -96,81 +64,6 @@ pub struct MessageChannel;
 impl Channel for MessageChannel {
     fn name() -> &'static str {
         "Message Channel"
-    }
-}
-
-fn on_unload_map_client(
-    mut msgs: EventReader<lightyear::prelude::ClientReceiveMessage<UnloadMap>>,
-    mut commands: Commands,
-) {
-    for msg in msgs.read() {
-        info!("Received Unload Map");
-        commands.queue(msg.message.clone());
-    }
-}
-
-fn on_reset_registration_client(
-    mut msgs: EventReader<lightyear::prelude::ClientReceiveMessage<ResetRegistrations>>,
-    mut commands: Commands,
-) {
-    for msg in msgs.read() {
-        info!("Received Reset Registration");
-        commands.queue(msg.message.clone());
-    }
-}
-
-fn on_load_map_client(
-    mut msgs: EventReader<lightyear::prelude::ClientReceiveMessage<LoadMap>>,
-    mut commands: Commands,
-) {
-    for msg in msgs.read() {
-        info!("Received Load Map");
-        commands.queue(msg.message.clone());
-    }
-}
-
-fn on_unload_map_server(
-    mut msgs: EventReader<lightyear::prelude::ServerReceiveMessage<UnloadMap>>,
-    mut mgr: ResMut<ServerConnectionManager>,
-    mut commands: Commands,
-) {
-    for msg in msgs.read() {
-        mgr.send_message_to_target::<MessageChannel, _>(
-            &msg.message,
-            lightyear::prelude::NetworkTarget::All,
-        )
-        .unwrap();
-        commands.queue(msg.message.clone());
-    }
-}
-
-fn on_reset_registration_server(
-    mut msgs: EventReader<lightyear::prelude::ServerReceiveMessage<ResetRegistrations>>,
-    mut mgr: ResMut<ServerConnectionManager>,
-    mut commands: Commands,
-) {
-    for msg in msgs.read() {
-        mgr.send_message_to_target::<MessageChannel, _>(
-            &msg.message,
-            lightyear::prelude::NetworkTarget::All,
-        )
-        .unwrap();
-        commands.queue(msg.message.clone());
-    }
-}
-
-fn on_load_map_server(
-    mut mgr: ResMut<ServerConnectionManager>,
-    mut msgs: EventReader<lightyear::prelude::ServerReceiveMessage<LoadMap>>,
-    mut commands: Commands,
-) {
-    for msg in msgs.read() {
-        mgr.send_message_to_target::<MessageChannel, _>(
-            &msg.message,
-            lightyear::prelude::NetworkTarget::All,
-        )
-        .unwrap();
-        commands.queue(msg.message.clone());
     }
 }
 
@@ -214,52 +107,29 @@ pub struct ResetRegistrations;
 
 impl Command for ResetRegistrations {
     fn apply(self, world: &mut World) -> () {
-        world.insert_resource(LuaScriptRunningContext::default());
+        // world.insert_resource(LuaScriptRunningContext::default());
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct LoadMap(String);
+/// Loads the specified map.
+/// 
+/// The map definition needs to have already been loaded from disk,
+/// and it's registration script needs to have been ran.
+#[derive(Clone)]
+pub struct LoadMap(pub MapId);
 
 impl Command for LoadMap {
     fn apply(self, world: &mut World) -> () {
-        let asset_server = world.resource::<AssetServer>();
-        let mapdef: Handle<MapDefAsset> = asset_server.load(format!("maps/{}/def.ron", self.0));
-        if asset_server.is_loaded(&mapdef) {
-            // Map def asset is loaded
-            info!("Map def asset is already loaded");
+        let lua = world.resource::<LuaCtx>().0.clone();
 
-            let mapdef_assets = world.resource::<Assets<MapDefAsset>>();
+        let (proto, path) = world.resource::<Protos<MapProto>>().get(&self.0.0).unwrap();
 
-            let mapdef = mapdef_assets.get(&mapdef).unwrap();
-
-            let handle = mapdef.script.clone();
-            let h = handle.clone();
-            world.add_observer(
-                move |trigger: Trigger<ScriptCompleted>, mut commands: Commands| {
-                    if trigger.0 == handle {
-                        // Map script has finished registering
-                        commands.entity(trigger.observer()).despawn();
-
-                        commands.queue(move |world: &mut World| {
-                            let lua = world.resource::<LuaCtx>().0.clone();
-
-                            let (proto, path) =
-                                world.resource::<Protos<MapProto>>().get("default").unwrap();
-
-                            if let Some(on_load) = proto.on_load {
-                                lua.set_path(path);
-                                lua.with_world(world, |_| on_load.call::<()>(())).unwrap();
-                            } else {
-                                panic!()
-                            }
-                        });
-                    }
-                },
-            );
-            ExecuteLuaScript::new(h).immediately().apply(world);
+        if let Some(on_load) = proto.on_load {
+            lua.set_path(path);
+            lua.with_world(world, |_| on_load.call::<()>(())).unwrap();
+        } else {
+            warn!("Map has no on_load!");
         }
-        world.insert_resource(CurrentMapHandle(mapdef));
     }
 }
 
@@ -267,8 +137,6 @@ impl Command for LoadMap {
 pub struct MapEntity;
 
 fn setup_lua(lua: &Lua) -> mlua::Result<()> {
-    // Map global
-
     let game = lua.table("game")?;
 
     game.set(
@@ -327,75 +195,23 @@ pub struct FloorPlaneArgs {
 #[derive(Resource)]
 struct CurrentMapHandle(Handle<MapDefAsset>);
 
-fn spawn_default_map(
-    mut commands: Commands,
-) {
-    let load_map = LoadMap("default".into());
-    commands.queue(load_map);
-    // mgr.send_message_to_target::<MessageChannel, _>(&load_map, lightyear::prelude::NetworkTarget::All).unwrap();
-}
-
 fn on_client_connect(
     mut events: EventReader<ServerConnectEvent>,
     mut mgr: ResMut<ServerConnectionManager>,
 ) {
-    for event in events.read() {
-        mgr.send_message::<MessageChannel, _>(event.client_id, &LoadMap("default".into()))
-            .unwrap();
-    }
-}
-
-fn wait_for_map_load(
-    mut asset_events: EventReader<AssetEvent<MapDefAsset>>,
-    current_map_handle: Res<CurrentMapHandle>,
-    mapdef_assets: Res<Assets<MapDefAsset>>,
-    mut commands: Commands,
-) {
-    for event in asset_events.read() {
-        match event {
-            AssetEvent::LoadedWithDependencies { id } => {
-                if current_map_handle.0.id() == *id {
-                    let mapdef = mapdef_assets.get(*id).unwrap();
-                    let handle = mapdef.script.clone();
-                    let h = handle.clone();
-                    commands.add_observer(
-                        move |trigger: Trigger<ScriptCompleted>, mut commands: Commands| {
-                            if trigger.0 == handle {
-                                // Map script has finished registering
-                                commands.entity(trigger.observer()).despawn();
-
-                                commands.queue(move |world: &mut World| {
-                                    let lua = world.resource::<LuaCtx>().0.clone();
-
-                                    let (proto, path) = world
-                                        .resource::<Protos<MapProto>>()
-                                        .get("default")
-                                        .unwrap();
-
-                                    if let Some(on_load) = proto.on_load {
-                                        lua.set_path(path);
-                                        lua.with_world(world, |_| on_load.call::<()>(())).unwrap();
-                                    }
-                                });
-                            }
-                        },
-                    );
-                    commands.queue(ExecuteLuaScript::new(h).immediately());
-                } else {
-                }
-            }
-            _ => {}
-        }
-    }
+    // for event in events.read() {
+    //     mgr.send_message::<MessageChannel, _>(event.client_id, &LoadMap("default".into()))
+    //         .unwrap();
+    // }
 }
 
 struct MapDefLoader;
 
 #[derive(Reflect, Asset)]
-struct MapDefAsset {
-    id: MapId,
-    name: String,
-    script: Handle<LuaScript>,
+pub struct MapDefAsset {
+    pub id: MapId,
+    pub name: String,
+    pub script: Handle<LuaScript>,
 }
 
 impl AssetLoader for MapDefLoader {
@@ -420,7 +236,6 @@ impl AssetLoader for MapDefLoader {
             let cur_path = load_context.asset_path();
 
             let path = if mapdef.script.starts_with(".") || mapdef.script.starts_with("..") {
-                info!("Path: {}", cur_path.path().display());
                 cur_path.path().parent().unwrap().join(&mapdef.script)
             } else {
                 mapdef.script
@@ -435,7 +250,7 @@ impl AssetLoader for MapDefLoader {
     }
 
     fn extensions(&self) -> &[&str] {
-        &["ron"]
+        &["map.ron"]
     }
 }
 
@@ -451,10 +266,8 @@ fn bind_input(
     mut actions: Query<&mut Actions<MapControlContext>>,
 ) {
     let mut actions = actions.get_mut(trigger.target()).unwrap();
-    info!("BINDING RELOAD MAP");
     actions
         .bind::<ReloadMap>()
         .to(KeyCode::F10)
-        .with_conditions(JustPress::default())
-        ;
+        .with_conditions(JustPress::default());
 }

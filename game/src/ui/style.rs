@@ -393,7 +393,7 @@ pub fn update_with_style2(
             &StyleRef,
             Option<&Style>,
         ),
-        Changed<StyleRef>,
+        Or<(Changed<StyleRef>, Changed<Style>)>,
     >,
     mut commands: Commands,
 ) {

@@ -36,6 +36,9 @@ pub fn client(app: &mut App) {
         .add_observer(on_player_swap_positions)
         .add_observer(on_we_left_lobby)
         .init_resource::<PlayerInfoCache>();
+    if app.world().resource::<Options>().auto_start.is_some() {
+        app.add_systems(Update, auto_start.run_if(in_state(LobbyMenuState::InLobby).and(resource_exists::<CurrentLobbyInfo>)));
+    }
 }
 
 pub fn setup(
@@ -48,9 +51,15 @@ pub fn setup(
     let _ = sender
         .0
         .send(ClientToLobby::GetLobbyInfo(trigger.event().0));
-    if options.auto_start {
-        options.auto_start = false;
-        _ = sender.send(ClientToLobby::GoToChampSelect);
+}
+
+pub fn auto_start(mut options: ResMut<Options>, mut timer: Local<f32>, time: Res<Time>, info: Res<CurrentLobbyInfo>, sender: Res<LobbySender>) {
+    if let Some(count) = options.auto_start && info.0.teams.iter().map(Vec::len).sum::<usize>() >= count {
+        *timer += time.elapsed_secs();
+        if count <= 1 || *timer > 1.0 {
+            _ = sender.send(ClientToLobby::GoToChampSelect);
+            options.auto_start = None;
+        }
     }
 }
 

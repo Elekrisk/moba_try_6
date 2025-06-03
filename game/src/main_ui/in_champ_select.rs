@@ -2,11 +2,9 @@ use bevy::prelude::*;
 use lobby_common::{ClientToLobby, PlayerId, Team};
 
 use crate::{
-    ChampDefs, LobbySender,
-    new_ui::{
-        View, ViewExt, button::ButtonView, image::ImageView, list::ListView, subtree::SubtreeView,
-        tree::UiFunc,
-    },
+    main_ui::lobby_list::MyPlayerId, new_ui::{
+        button::ButtonView, image::ImageView, list::ListView, subtree::SubtreeView, tree::UiFunc, View, ViewExt
+    }, ChampDefs, LobbySender, Options
 };
 
 use super::{
@@ -40,9 +38,14 @@ pub fn champ_select2() -> impl View {
         .width(Val::Percent(100.0))
 }
 
-fn champ_select3(lobby: Res<CurrentLobbyInfo>) -> Option<impl View + use<>> {
+fn champ_select3(lobby: Res<CurrentLobbyInfo>, mut options: ResMut<Options>, my_id: Res<MyPlayerId>, sender: Res<LobbySender>) -> Option<impl View + use<>> {
     if !lobby.is_changed() {
         return None;
+    }
+
+    if options.auto_lock && lobby.0.selected_champs.get(&my_id.0).is_some() {
+        _ = sender.send(ClientToLobby::LockSelection);
+        options.auto_lock = false;
     }
 
     let lobby = &lobby.0;
@@ -176,7 +179,7 @@ fn player_slot_2(team: Team, player: PlayerId) -> SubtreeView<impl UiFunc> {
     )
 }
 
-fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
+fn champ_select_buttons(res: Res<ChampDefs>, mut options: ResMut<Options>, sender: Res<LobbySender>) -> Option<impl View + use<>> {
     if !res.is_changed() {
         return None;
     }
@@ -188,6 +191,11 @@ fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
         .values()
         .collect::<Vec<_>>();
     champs.sort_by_key(|c| &c.name);
+
+    if options.auto_pick_first_champ {
+        _ = sender.send(ClientToLobby::SelectChamp(champs[0].id.clone()));
+        options.auto_pick_first_champ = false;
+    }
 
     for champ in champs {
         let label = format!("champ_select_{}", champ.id.0);
@@ -204,7 +212,7 @@ fn champ_select_buttons(res: Res<ChampDefs>) -> Option<impl View + use<>> {
                 .styled()
                 .flex_direction(FlexDirection::Column),
             label,
-            send_msg(ClientToLobby::SelectChamp(champ.id)),
+            send_msg(ClientToLobby::SelectChamp(champ.id.clone())),
         );
 
         list.add(button);

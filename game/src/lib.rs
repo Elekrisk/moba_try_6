@@ -7,21 +7,24 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(debug_closure_helpers)]
 #![feature(array_windows)]
+#![feature(never_type)]
+#![feature(random)]
 
 use std::{fmt::Display, path::PathBuf};
 
-use bevy::{
-    asset::AssetLoader, platform::collections::HashMap, prelude::*
-};
+use bevy::{asset::AssetLoader, platform::collections::HashMap, prelude::*};
 
 mod r#async;
+mod ingame;
 mod main_ui;
 mod network;
 mod new_ui;
 mod ui;
-mod ingame;
 
-pub use ingame::{Players, InGamePlayerInfo, network::{PROTOCOL_ID, PrivateKey, ServerOptions}};
+pub use ingame::{
+    InGamePlayerInfo, Players,
+    network::{PROTOCOL_ID, PrivateKey, ServerOptions},
+};
 pub use network::Sess;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
@@ -31,14 +34,19 @@ pub use network::LobbySender;
 pub fn client(app: &mut App) {
     common(app);
 
-    app.add_plugins((ui::client, new_ui::client, main_ui::client, network::client, ingame::client));
-    app.add_systems(Startup, client_setup)
-        .add_systems(OnEnter(ClientState::InGame), || info!("Entered InGame state"));
+    app.add_plugins((
+        ui::client,
+        new_ui::client,
+        main_ui::client,
+        network::client,
+        ingame::client,
+    ));
+    app.add_systems(Startup, client_setup);
 
     app.insert_state(if app.world().resource::<Options>().immediately_ingame {
-        ClientState::InGame
+        GameState::InGame
     } else {
-        ClientState::NotInGame
+        GameState::NotInGame
     });
 }
 
@@ -46,14 +54,19 @@ pub fn server(app: &mut App) {
     common(app);
 
     app.add_plugins(ingame::server);
-
-    app.add_systems(Update, |ps: Option<Res<ServerConnectionManager>>, mut exit: EventWriter<AppExit>, time: Res<Time>| {
-        if let Some(server) = ps {
-            if server.connected_clients().next().is_none() && time.elapsed_secs() > 15.0 {
-                exit.write(AppExit::Success);
+    app.insert_state(GameState::Loading);
+    app.add_systems(
+        Update,
+        |ps: Option<Res<ServerConnectionManager>>,
+         mut exit: EventWriter<AppExit>,
+         time: Res<Time>| {
+            if let Some(server) = ps {
+                if server.connected_clients().next().is_none() && time.elapsed_secs() > 15.0 {
+                    exit.write(AppExit::Success);
+                }
             }
-        }
-    });
+        },
+    );
 }
 
 fn common(app: &mut App) {
@@ -68,9 +81,10 @@ fn common(app: &mut App) {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
 #[states(scoped_entities)]
-pub enum ClientState {
+pub enum GameState {
     #[default]
     NotInGame,
+    Loading,
     InGame,
 }
 
@@ -81,9 +95,10 @@ fn client_setup(mut commands: Commands) {
         Transform::from_xyz(0.0, 55.0, 55.0).looking_at(Vec3::ZERO, Vec3::Y),
         // Transform::from_xyz(0.0, 55.0, 0.0).looking_at(Vec3::ZERO, Vec3::new(-1.0, 0.0, -1.0).normalize())
     ));
-    commands.spawn((DirectionalLight {
-        ..default()
-    }, Transform::from_xyz(15.0, 15.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y)));
+    commands.spawn((
+        DirectionalLight { ..default() },
+        Transform::from_xyz(15.0, 15.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
 }
 
 #[derive(Resource, clap::Parser)]
@@ -93,11 +108,15 @@ pub struct Options {
     #[arg(long, default_value_t = LobbyMode::None)]
     lobby_mode: LobbyMode,
     #[arg(long)]
-    auto_start: bool,
+    auto_start: Option<usize>,
     #[arg(long)]
     pub log_file: Option<PathBuf>,
     #[arg(long)]
     immediately_ingame: bool,
+    #[arg(long)]
+    auto_pick_first_champ: bool,
+    #[arg(long)]
+    auto_lock: bool,
 }
 
 #[derive(Clone, Default, clap::ValueEnum)]
@@ -157,7 +176,7 @@ fn wait_for_list_load(
                         .values()
                         .map(|handle| {
                             let def = defs.get(handle).unwrap();
-                            (def.id, def.clone())
+                            (def.id.clone(), def.clone())
                         })
                         .collect(),
                 });
@@ -232,7 +251,7 @@ impl AssetLoader for ChampDefsLoader {
     }
 
     fn extensions(&self) -> &[&str] {
-        &["ron"]
+        &["champs.ron"]
     }
 }
 

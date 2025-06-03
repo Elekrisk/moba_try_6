@@ -24,11 +24,10 @@ pub fn common(app: &mut App) {
     // Temporary setup
     app.add_systems(Startup, setup);
     if app.is_server() {
-        app.add_systems(Update, update_terrain.run_if(resource_changed::<Terrain>).after(super::lua::execute_lua));
+        app.add_systems(Update, update_terrain.run_if(resource_changed::<Terrain>));
     }
 
     if app.is_client() {
-        info!("ADDING DANGEROUS STUFF");
         app.init_resource::<CurrentMeshEntity>()
             .register_type::<DrawNavmesh>()
             .insert_resource(DrawNavmesh(true))
@@ -71,14 +70,11 @@ fn update_terrain(
     terrain_data: Query<(Entity, &mut TerrainData), With<SpawnedTerrainEntity>>,
     mut commands: Commands,
 ) {
-    info!("Updating terrain! ({} objects)", terrain.objects.len());
     for (e, _) in &terrain_data {
         commands.entity(e).despawn();
     }
-    info!("All terrain objects have been despawned");
 
     for object in &terrain.objects {
-        info!("Spawning TerrainData entity");
         commands.spawn((
             Transform::default(),
             TerrainData {
@@ -117,17 +113,15 @@ fn display_mesh(
     navmeshes: Res<Assets<NavMesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut current_mesh_entity: ResMut<CurrentMeshEntity>,
-    window_resized: EventReader<WindowResized>,
+    // window_resized: EventReader<WindowResized>,
     navmesh: Single<(&ManagedNavMesh, Ref<NavMeshStatus>)>,
 ) {
     let (navmesh_handle, status) = navmesh.deref();
-    if (!status.is_changed() || **status != NavMeshStatus::Built) && window_resized.is_empty() {
+    if (!status.is_changed() || **status != NavMeshStatus::Built) /*&& window_resized.is_empty()*/ {
         if current_mesh_entity.is_some() {
             return;
         }
     }
-
-    info!("Rebuilding navmesh display");
 
     let Some(navmesh) = navmeshes.get(*navmesh_handle) else {
         return;
@@ -170,7 +164,6 @@ impl ObstacleSource for TerrainData {
         navmesh_transform: &Transform,
         _up: (Dir3, f32),
     ) -> Vec<Vec<Vec2>> {
-        info!("GETTING POLYGONS");
         let inverse = navmesh_transform.compute_affine().inverse();
 
         let transform = obstacle_transform.compute_transform();

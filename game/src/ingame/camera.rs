@@ -23,7 +23,6 @@ pub fn client(app: &mut App) {
 }
 
 fn setup_camera(camera: Single<Entity, With<Camera>>, mut commands: Commands) {
-    info!("????");
     commands
         .spawn((CameraFocus, Transform::from_xyz(0.0, 0.0, 0.0)))
         .add_child(*camera);

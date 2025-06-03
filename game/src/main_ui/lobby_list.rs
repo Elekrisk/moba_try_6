@@ -92,7 +92,7 @@ fn listen_to_lobby_server(
             }
         };
 
-        info!("event: {event:?}");
+        // info!("event: {event:?}");
         match event {
             LobbyMessage::LobbyConnected(id) => {
                 commands.set_state(ConnectionState::Connected);

@@ -66,7 +66,7 @@ fn main() -> AppExit {
                     // level: bevy::log::Level::DEBUG,
                     ..default()
                 }),
-            FpsOverlayPlugin::default(),
+            // FpsOverlayPlugin::default(),
             EguiPlugin {
                 enable_multipass_for_primary_context: true,
             },
@@ -85,7 +85,6 @@ fn main() -> AppExit {
                 .with_conditions(JustPress::default());
             commands.spawn(actions).observe(
                 |_: Trigger<Fired<ToggleInspector>>, mut r: ResMut<RunInspector>| {
-                    info!("Toggle inspector fired!");
                     r.0 = !r.0;
                 },
             );
@@ -95,7 +94,6 @@ fn main() -> AppExit {
             (|mut events: EventReader<AppExit>, sender: Option<Res<LobbySender>>| {
                 for _ in events.read() {
                     if let Some(ref sender) = sender {
-                        info!("Sending DISCONNECT");
                         _ = sender.0.send(ClientToLobby::Disconnect);
                     }
                 }

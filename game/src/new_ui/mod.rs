@@ -141,7 +141,7 @@ impl View for () {
     type Widget = (Entity, Entity);
 
     fn build(&mut self, parent: &mut ChildSpawnerCommands) -> Self::Widget {
-        (parent.spawn_empty().id(), parent.target_entity())
+        (parent.spawn(Node::default()).id(), parent.target_entity())
     }
 
     fn rebuild(&mut self, _prev: &Self, _widget: &mut Self::Widget, _commands: Commands) {}

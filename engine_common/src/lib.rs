@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "bevy", derive(bevy_reflect::prelude::Reflect))]
-pub struct ChampionId(pub Uuid);
+pub struct ChampionId(pub String);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "bevy", derive(bevy_reflect::prelude::Reflect, bevy_asset::prelude::Asset))]
@@ -18,7 +18,7 @@ pub struct ChampionDef {
 impl ChampionDef {
     pub fn example() -> Self {
         Self {
-            id: ChampionId(Uuid::nil()),
+            id: ChampionId("example_champion".into()),
             name: "Example Champion".into(),
             icon: "champs/unknown.png".into(),
         }
@@ -34,9 +34,9 @@ impl ChampList {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "bevy", derive(bevy_reflect::prelude::Reflect))]
-pub struct MapId(pub Uuid);
+pub struct MapId(pub String);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "bevy", derive(bevy_reflect::prelude::Reflect, bevy_asset::prelude::Asset))]

@@ -27,7 +27,6 @@ pub fn common(app: &mut App) {
             .add_observer(bind_input)
             .add_observer(on_move_click)
             .add_systems(Startup, |mut commands: Commands| {
-                info!("Spawning UnitControlContext actions");
                 commands.spawn(Actions::<UnitControlContext>::default());
             })
             .add_systems(Update, draw_current_path);
@@ -38,12 +37,6 @@ pub fn common(app: &mut App) {
         app.add_observer(on_set_unit_movement_target);
         app.add_systems(FixedUpdate, move_unit_along_path);
     }
-
-    app.add_systems(FixedUpdate, |q: Query<Entity, Changed<CurrentPath>>| {
-        for e in &q {
-            info!("CURRENT PATH CHANGED FOR {e}");
-        }
-    });
 
     app.setup_lua(setup_lua);
 }
@@ -142,7 +135,6 @@ fn bind_input(
     mut actions: Query<&mut Actions<UnitControlContext>>,
 ) {
     let mut actions = actions.get_mut(trigger.target()).unwrap();
-    info!("Binding move click!");
     actions
         .bind::<MoveClick>()
         .to(MouseButton::Right)
@@ -154,7 +146,6 @@ fn on_move_click(
     mouse_pos: Res<MousePos>,
     mut commands: Commands,
 ) {
-    info!("Sending move click!");
     commands.client_trigger::<MessageChannel>(SetUnitMovementTarget(mouse_pos.plane_pos));
 }
 
@@ -239,16 +230,9 @@ fn unit_pathfinding(
                     let a_vert = &layer.vertices[a as usize];
                     let b_vert = &layer.vertices[b as usize];
 
-                    // gizmos.line(
-                    //     vec3(a_vert.coords.x - 50.0, 0.6, 50.0 - a_vert.coords.y),
-                    //     vec3(b_vert.coords.x - 50.0, 0.6, 50.0 - b_vert.coords.y),
-                    //     Color::WHITE.with_alpha(0.25),
-                    // );
-
                     let segment = Segment2d::new(a_vert.coords, b_vert.coords);
                     let segment_relative = local_end - segment.point1();
                     let scalar_proj = segment_relative.dot(segment.direction().as_vec2());
-                    // info!("SCALAR PROJ: {}", scalar_proj);
 
                     let scalar_proj = scalar_proj.clamp(0.0, segment.length());
 
@@ -270,7 +254,6 @@ fn unit_pathfinding(
                 .xy(),
             closest_point,
         ) {
-            // info!("{path:#?}");
             let path = path
                 .path
                 .iter()

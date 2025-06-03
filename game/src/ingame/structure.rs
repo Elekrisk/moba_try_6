@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{ingame::{map::MapEntity, navmesh::TerrainData}, AppExt};
 
 use super::{
-    hittable::Health,
+    targetable::Health,
     lua::{AppLuaExt, AssetPathExt, LuaExt, Protos},
 };
 
@@ -77,9 +77,6 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
             let path = proto.model.relative(&path);
 
             if lua.is_server() {
-                // The server should own the entity
-                info!("Spawning structure! Should replicate to client");
-
                 // Calculate terrain data
                 let perimeter = Circle::new(proto.radius).perimeter();
                 // Vertex step of 0.1, at least 4 vertices
@@ -94,8 +91,6 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
                 let vertices = (0..vertices)
                     .map(|i| point_on_circle(vertex_step * i as f32) * proto.radius)
                     .collect::<Vec<_>>();
-
-                info!("Spawning with {} points", vertices.len());
 
                 world.spawn((
                     Transform::from_xyz(args.position.x, 0.0, args.position.y),
@@ -154,7 +149,6 @@ fn on_insert_model(
         return;
     };
 
-    info!("Loading {}", model.0);
     let handle = asset_server.load(&model.0);
 
     commands.entity(trigger.target()).insert(SceneRoot(handle));

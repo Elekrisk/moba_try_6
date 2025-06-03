@@ -126,6 +126,7 @@ impl<F: UiFunc, C: Fn(&World) -> bool + Send + Sync + 'static> UiFunc for IfRunn
 }
 
 #[derive(Component)]
+#[require(Node)]
 pub struct UiTree {
     ui: Option<Box<dyn UiFunc>>,
     widget: Option<BoxedWidget>,

@@ -1,5 +1,7 @@
 -- How would you define a nexus?
 
+game.register_asset("./nexus.glb#Scene0")
+
 local nexus = game.register_structure {
     id = "nexus",
     name = "Nexus",

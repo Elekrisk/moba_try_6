@@ -1,5 +1,5 @@
 use crate::{
-    ClientState, LobbySender, Options,
+    GameState, LobbySender, Options,
     network::{ConnectToLobbyCommand, LobbyConnectionFailed},
     new_ui::{
         View, ViewExt,
@@ -28,7 +28,7 @@ pub fn client(app: &mut App) {
             in_lobby::client,
             in_champ_select::client,
         ))
-        .add_systems(OnEnter(ClientState::NotInGame), create_ui)
+        .add_systems(OnEnter(GameState::NotInGame), create_ui)
         .add_systems(OnEnter(ConnectionState::Connecting), on_connect_start);
 }
 
@@ -53,7 +53,7 @@ pub enum LobbyMenuState {
 
 pub fn create_ui(mut options: ResMut<Options>, mut commands: Commands) {
     commands.spawn((
-        StateScoped(ClientState::NotInGame),
+        StateScoped(GameState::NotInGame),
         Node {
             width: Val::Percent(100.0),
             height: Val::Percent(100.0),

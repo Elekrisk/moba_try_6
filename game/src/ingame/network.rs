@@ -41,12 +41,6 @@ pub fn client(app: &mut App) {
     };
 
     app.add_plugins(ClientPlugins::new(config));
-
-    app.add_systems(Update, |mut events: EventReader<EntitySpawnEvent>| {
-        for event in events.read() {
-            info!("Entity spawned! {}", event.entity());
-        }
-    });
 }
 
 pub fn server(app: &mut App) {
@@ -80,7 +74,8 @@ pub fn common(app: &mut App) {
 pub struct ServerOptions {
     #[arg(long)]
     pub address: Option<IpAddr>,
-    pub port: u16,
+    pub internal_port: u16,
+    pub external_port: u16,
 }
 
 #[derive(Resource)]
@@ -92,12 +87,11 @@ pub fn init_server(
     mut config: ResMut<ServerConfig>,
     mut commands: Commands,
 ) {
-    info!("Starting server...");
     let server::NetConfig::Netcode { config, io } = &mut config.net[0];
     config.private_key = key.0;
     let server::ServerTransport::UdpSocket(port) = &mut io.transport else {
         unreachable!()
     };
-    port.set_port(options.port);
+    port.set_port(options.external_port);
     commands.start_server();
 }

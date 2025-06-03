@@ -1,11 +1,16 @@
-use std::{sync::Arc};
+use std::{sync::Arc, time::Duration};
 
 use bevy::{
-    app::TerminalCtrlCHandlerPlugin, diagnostic::DiagnosticsPlugin, log::LogPlugin, platform::collections::HashMap, prelude::*, state::app::StatesPlugin
+    app::{ScheduleRunnerPlugin, TerminalCtrlCHandlerPlugin},
+    diagnostic::DiagnosticsPlugin,
+    log::LogPlugin,
+    platform::collections::HashMap,
+    prelude::*,
+    state::app::StatesPlugin,
 };
 use clap::Parser;
-use game::{InGamePlayerInfo, Players, PrivateKey, ServerOptions, Sess, PROTOCOL_ID};
-use lightyear::prelude::{generate_key, ClientId, ConnectToken};
+use game::{InGamePlayerInfo, PROTOCOL_ID, Players, PrivateKey, ServerOptions, Sess};
+use lightyear::prelude::{ClientId, ConnectToken, generate_key};
 use lobby_common::{LobbyToServer, ServerToLobby};
 use wtransport::{Endpoint, Identity, ServerConfig};
 
@@ -27,7 +32,7 @@ fn main() -> AppExit {
             // Wait for connection from lobby server
             let server = Endpoint::server(
                 ServerConfig::builder()
-                    .with_bind_default(54653)
+                    .with_bind_default(options.internal_port)
                     .with_identity(
                         Identity::self_signed([
                             "localhost",
@@ -60,22 +65,22 @@ fn main() -> AppExit {
 
             for player in players {
                 let client_id = player.id.0.as_u64_pair().0;
-                let token = ConnectToken::build(
-                    (addr, options.port),
-                    PROTOCOL_ID,
-                    client_id,
-                    private_key,
-                )
-                .generate()
-                .unwrap();
+                let token =
+                    ConnectToken::build((addr, options.external_port), PROTOCOL_ID, client_id, private_key)
+                        .generate()
+                        .unwrap();
 
-                player_infos.insert(player.id, InGamePlayerInfo {
-                    id: player.id,
-                    client_id: ClientId::Netcode(client_id),
-                    team: player.team,
-                    champion: player.champ,
-                    controlled_unit: None,
-                });
+                player_infos.insert(
+                    player.id,
+                    InGamePlayerInfo {
+                        id: player.id,
+                        name: player.name,
+                        client_id: ClientId::Netcode(client_id),
+                        team: player.team,
+                        champion: player.champ,
+                        controlled_unit: None,
+                    },
+                );
 
                 let bytes = token.try_into_bytes().unwrap();
 
@@ -100,8 +105,12 @@ fn main() -> AppExit {
     App::new()
         .insert_resource(options)
         .insert_resource(players)
+        .insert_resource(PrivateKey(private_key))
         .add_plugins((
-            MinimalPlugins,
+            MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
+                // Run 60 times per second.
+                Duration::from_secs_f64(1.0 / 60.0),
+            )),
             LogPlugin {
                 // filter: "lightyear=debug".into(),
                 // level: bevy::log::Level::DEBUG,
@@ -114,6 +123,5 @@ fn main() -> AppExit {
             StatesPlugin::default(),
             game::server,
         ))
-        .insert_resource(PrivateKey(private_key))
         .run()
 }

@@ -6,6 +6,14 @@
 
 game.ensure_loaded("structures/nexus.lua")
 
+game.register_asset("./floor.png")
+
+for asset=1, 5 do
+    -- game.register_asset("dummy" .. asset .. ".dummy")
+end
+
+
+
 local map = game.register_map {
     id = "default",
     name = "Default",
