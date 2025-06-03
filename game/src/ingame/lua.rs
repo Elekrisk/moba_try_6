@@ -394,8 +394,8 @@ fn wait_for_script_load(
     }
 }
 
-#[derive(Component)]
-pub struct LuaObject(pub LuaTable);
+// #[derive(Component)]
+// pub struct LuaObject(pub LuaTable);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Deref, DerefMut)]
 pub struct W<T>(pub T);

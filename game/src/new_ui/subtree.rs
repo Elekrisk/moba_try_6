@@ -29,6 +29,7 @@ impl<F: UiFunc> SubtreeView<F> {
 }
 
 impl<F: UiFunc> SubtreeView<OnceRunner<F>> {
+    #[allow(dead_code)]
     pub fn once<M, I: IntoUiFunc<M, UiFunc = F>>(label: impl Into<String>, subtree: I) -> Self {
         Self {
             label: label.into(),

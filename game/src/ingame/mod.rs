@@ -1,12 +1,12 @@
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
+use engine_common::ChampionId;
 use lightyear::{
-    client::config::ClientConfig,
-    prelude::{
-        ClientDisconnectEvent, ConnectToken,
-        client::{self, Authentication, ClientCommandsExt},
-    },
+    client::config::ClientConfig, prelude::{ClientId,
+        client::{self, Authentication, ClientCommandsExt}, ClientDisconnectEvent, ConnectToken
+    }
 };
+use lobby_common::{PlayerId, Team};
 
 use crate::ClientState;
 
@@ -65,4 +65,17 @@ fn on_disconnect(mut events: EventReader<ClientDisconnectEvent>, mut commands: C
         info!("Disconnect: {event:?}");
         commands.set_state(ClientState::NotInGame);
     }
+}
+
+#[derive(Resource)]
+pub struct Players {
+    pub players: HashMap<PlayerId, InGamePlayerInfo>,
+}
+
+pub struct InGamePlayerInfo {
+    pub id: PlayerId,
+    pub client_id: ClientId,
+    pub team: Team,
+    pub champion: ChampionId,
+    pub controlled_unit: Option<Entity>,
 }

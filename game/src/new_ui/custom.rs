@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 use super::{View, Widget};
 
+#[allow(dead_code)]
 pub struct CustomView<
     B: FnMut(&mut ChildSpawnerCommands) -> CustomWidget,
     R: FnMut(&Self, &mut CustomWidget, Commands),

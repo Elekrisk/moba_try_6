@@ -5,8 +5,6 @@ use bevy::prelude::*;
 use scrollable::ScrollableView;
 use stylable::Stylable;
 
-use crate::ui::style::{Style, StyleRef};
-
 pub mod button;
 pub mod container;
 pub mod custom;
@@ -27,12 +25,6 @@ pub fn client(app: &mut App) {
         button::client,
         scrollable::client,
     ));
-}
-
-#[derive(Debug, Default)]
-pub struct Pod {
-    pub style_ref: StyleRef,
-    pub style_override: Style,
 }
 
 pub trait View: Debug + Any + Send + Sync {
@@ -234,6 +226,7 @@ pub trait ViewExt: View + Sized {
 }
 
 impl<V: View> ViewExt for V {}
+#[allow(dead_code)]
 
 pub trait WidgetExt: Any + Sized {}
 

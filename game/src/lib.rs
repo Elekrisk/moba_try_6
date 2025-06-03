@@ -16,13 +16,15 @@ use bevy::{
 
 mod r#async;
 mod main_ui;
-pub mod network;
-pub mod new_ui;
-pub mod ui;
-pub mod ingame;
+mod network;
+mod new_ui;
+mod ui;
+mod ingame;
+
+pub use ingame::{Players, InGamePlayerInfo, network::{PROTOCOL_ID, PrivateKey, ServerOptions}};
+pub use network::Sess;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
-use ingame::network::ServerOptions;
 use lightyear::prelude::ServerConnectionManager;
 pub use network::LobbySender;
 

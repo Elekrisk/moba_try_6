@@ -1,15 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{sync::Arc};
 
 use bevy::{
-    app::TerminalCtrlCHandlerPlugin, diagnostic::DiagnosticsPlugin, log::LogPlugin, prelude::*,
-    state::app::StatesPlugin,
+    app::TerminalCtrlCHandlerPlugin, diagnostic::DiagnosticsPlugin, log::LogPlugin, platform::collections::HashMap, prelude::*, state::app::StatesPlugin
 };
 use clap::Parser;
-use game::{
-    ingame::network::{PROTOCOL_ID, PrivateKey, ServerOptions},
-    network::Sess,
-};
-use lightyear::prelude::{ConnectToken, generate_key};
+use game::{InGamePlayerInfo, Players, PrivateKey, ServerOptions, Sess, PROTOCOL_ID};
+use lightyear::prelude::{generate_key, ClientId, ConnectToken};
 use lobby_common::{LobbyToServer, ServerToLobby};
 use wtransport::{Endpoint, Identity, ServerConfig};
 
@@ -19,7 +15,7 @@ fn main() -> AppExit {
 
     let private_key = generate_key();
 
-    let success = tokio::runtime::Runtime::new()
+    let players = tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
             let addr = if let Some(addr) = options.address {
@@ -55,20 +51,31 @@ fn main() -> AppExit {
                 players,
             } = conn.recv().await.unwrap()
             else {
-                return false;
+                return None;
             };
 
-            let mut tokens = HashMap::new();
+            let mut tokens = std::collections::HashMap::new();
+
+            let mut player_infos = HashMap::new();
 
             for player in players {
+                let client_id = player.id.0.as_u64_pair().0;
                 let token = ConnectToken::build(
                     (addr, options.port),
                     PROTOCOL_ID,
-                    player.id.0.as_u64_pair().0,
+                    client_id,
                     private_key,
                 )
                 .generate()
                 .unwrap();
+
+                player_infos.insert(player.id, InGamePlayerInfo {
+                    id: player.id,
+                    client_id: ClientId::Netcode(client_id),
+                    team: player.team,
+                    champion: player.champ,
+                    controlled_unit: None,
+                });
 
                 let bytes = token.try_into_bytes().unwrap();
 
@@ -81,15 +88,18 @@ fn main() -> AppExit {
 
             conn.0.0.closed().await;
 
-            true
+            Some(Players {
+                players: player_infos,
+            })
         });
 
-    if !success {
+    let Some(players) = players else {
         return AppExit::error();
-    }
+    };
 
     App::new()
         .insert_resource(options)
+        .insert_resource(players)
         .add_plugins((
             MinimalPlugins,
             LogPlugin {

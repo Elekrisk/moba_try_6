@@ -125,6 +125,9 @@ pub struct MovementTarget(pub Vec2);
 #[derive(Debug, Event, Clone, Serialize, Deserialize)]
 pub struct SetUnitMovementTarget(Vec2);
 
+#[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ControlledByClient(ClientId);
+
 // --- CLIENT ---
 
 #[derive(InputContext)]

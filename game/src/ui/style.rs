@@ -1,10 +1,6 @@
 use std::marker::PhantomData;
 
-use bevy::{
-    platform::collections::HashMap,
-    prelude::*,
-    reflect::DynamicStruct,
-};
+use bevy::{platform::collections::HashMap, prelude::*, reflect::DynamicStruct};
 
 pub fn client(app: &mut App) {
     app.insert_resource(Styles::new_with_default()).add_systems(
@@ -70,6 +66,7 @@ impl Styles {
         self.styles.get(name.label())
     }
 
+    #[allow(dead_code)]
     pub fn get_mut(&mut self, name: impl StyleLabel) -> Option<&mut Style> {
         self.styles.get_mut(name.label())
     }
@@ -89,7 +86,8 @@ impl Styles {
                 .into_mut(),
         )
     }
-
+    
+    #[allow(dead_code)]
     pub fn insert(&mut self, name: impl StyleLabel, style: Style) {
         self.styles.insert(name.label().into(), style);
     }
@@ -214,6 +212,7 @@ impl Style {
     pub fn set_node_field<T: PartialReflect>(&mut self, name: &str, value: T) {
         self.node_stuff.insert(name, value);
     }
+    #[allow(dead_code)]
 
     pub fn apply(&mut self, child: &Style) {
         for (i, field) in child.node_stuff.iter_fields().enumerate() {

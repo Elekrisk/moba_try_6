@@ -87,6 +87,7 @@ impl<V: View> Stylable<V> {
 macro impl_styles($($name:ident : $ty:ty),* $(,)?) {
     impl<V: View> Stylable<V> {
         $(
+            #[allow(dead_code)]
             pub fn $name(self, value: $ty) -> Self {
                 self.with(stringify!($name), value).unwrap()
             }

@@ -36,6 +36,7 @@ impl<V: ErasedView, S: System<In = (), Out = Option<V>>> UiFunc for UiFuncSystem
     }
 }
 
+#[allow(dead_code)]
 pub struct UiFuncSystemIn<V: ErasedView, S: System<In = In<Entity>, Out = Option<V>>>(
     S,
     Option<SystemId<In<Entity>, Option<V>>>,
@@ -148,6 +149,7 @@ impl UiTree {
         }
     }
 
+    #[allow(dead_code)]
     pub fn run_if<M>(
         f: impl IntoUiFunc<M>,
         cond: impl Fn(&World) -> bool + Send + Sync + 'static,

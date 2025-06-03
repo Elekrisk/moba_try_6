@@ -389,15 +389,6 @@ fn wait_for_map_load(
     }
 }
 
-pub struct SpawnMap(MapDef);
-
-impl Command for SpawnMap {
-    fn apply(self, world: &mut World) -> () {
-        let lua = world.resource::<LuaCtx>();
-        lua.load(self.0.script).exec().unwrap();
-    }
-}
-
 struct MapDefLoader;
 
 #[derive(Reflect, Asset)]
