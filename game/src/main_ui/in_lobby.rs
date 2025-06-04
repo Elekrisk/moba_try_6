@@ -43,7 +43,6 @@ pub fn client(app: &mut App) {
 
 pub fn setup(
     trigger: Trigger<WeJoinedLobby>,
-    mut options: ResMut<Options>,
     sender: Res<LobbySender>,
     mut commands: Commands,
 ) {

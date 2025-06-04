@@ -9,7 +9,6 @@ use lightyear::{
     connection::netcode::PRIVATE_KEY_BYTES,
     prelude::{server::ServerCommandsExt as _, *},
     server::{config::ServerConfig, plugin::ServerPlugins},
-    shared::events::components::EntitySpawnEvent,
 };
 use lobby_common::Team;
 

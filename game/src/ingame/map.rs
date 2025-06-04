@@ -7,8 +7,7 @@ use bevy_enhanced_input::{
 };
 use engine_common::{MapDef, MapId};
 use lightyear::prelude::{
-    AppChannelExt, AppComponentExt, AppMessageExt, Channel, ClientConnectionManager, MessageSend,
-    ReliableSettings, Replicated, ServerConnectEvent, ServerConnectionManager,
+    AppChannelExt, AppComponentExt, Channel, ReliableSettings, Replicated,
 };
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -16,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::AppExt;
 
 use super::{
-    lua::{AppLuaExt, LuaCtx, LuaExt, LuaScript, Protos, ScriptCompleted},
+    lua::{AppLuaExt, LuaCtx, LuaExt, LuaScript, Protos},
     terrain::Terrain,
 };
 
@@ -106,7 +105,7 @@ impl Command for UnloadMap {
 pub struct ResetRegistrations;
 
 impl Command for ResetRegistrations {
-    fn apply(self, world: &mut World) -> () {
+    fn apply(self, _world: &mut World) -> () {
         // world.insert_resource(LuaScriptRunningContext::default());
     }
 }
@@ -191,20 +190,6 @@ pub struct FloorPlaneArgs {
     dimensions: Vec2,
     image: PathBuf,
 }
-
-#[derive(Resource)]
-struct CurrentMapHandle(Handle<MapDefAsset>);
-
-fn on_client_connect(
-    mut events: EventReader<ServerConnectEvent>,
-    mut mgr: ResMut<ServerConnectionManager>,
-) {
-    // for event in events.read() {
-    //     mgr.send_message::<MessageChannel, _>(event.client_id, &LoadMap("default".into()))
-    //         .unwrap();
-    // }
-}
-
 struct MapDefLoader;
 
 #[derive(Reflect, Asset)]

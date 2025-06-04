@@ -24,6 +24,7 @@ fn main() -> AppExit {
         .unwrap()
         .block_on(async move {
             let addr = if let Some(addr) = options.address {
+                println!("Using addr {}", addr);
                 addr
             } else {
                 public_ip_address::perform_lookup(None).await.unwrap().ip

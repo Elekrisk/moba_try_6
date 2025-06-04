@@ -146,6 +146,7 @@ macro_rules! proto {
 pub struct LuaCtx(pub Lua);
 
 #[derive(Event)]
+#[allow(dead_code)]
 pub struct ScriptCompleted(pub Handle<LuaScript>);
 
 struct IsServer(bool);

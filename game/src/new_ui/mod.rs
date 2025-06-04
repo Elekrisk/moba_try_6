@@ -17,6 +17,7 @@ pub mod subtree;
 pub mod tabbed;
 pub mod text;
 pub mod tree;
+pub mod text_edit;
 
 pub fn client(app: &mut App) {
     app.add_plugins((
@@ -24,6 +25,7 @@ pub fn client(app: &mut App) {
         tabbed::client,
         button::client,
         scrollable::client,
+        text_edit::plugin,
     ));
 }
 

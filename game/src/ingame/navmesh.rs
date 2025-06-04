@@ -1,6 +1,6 @@
 use std::{f32::consts::FRAC_PI_2, ops::Deref};
 
-use bevy::{prelude::*, window::WindowResized};
+use bevy::prelude::*;
 use lightyear::prelude::{AppComponentExt, ChannelDirection, ServerReplicate};
 use serde::{Deserialize, Serialize};
 use vleue_navigator::{
@@ -117,7 +117,7 @@ fn display_mesh(
     navmesh: Single<(&ManagedNavMesh, Ref<NavMeshStatus>)>,
 ) {
     let (navmesh_handle, status) = navmesh.deref();
-    if (!status.is_changed() || **status != NavMeshStatus::Built) /*&& window_resized.is_empty()*/ {
+    if !status.is_changed() || **status != NavMeshStatus::Built /*&& window_resized.is_empty()*/ {
         if current_mesh_entity.is_some() {
             return;
         }

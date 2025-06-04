@@ -1,7 +1,7 @@
 use std::{any::TypeId, fs::File, path::PathBuf, sync::OnceLock};
 
 use bevy::{
-    asset::{ReflectAsset, UntypedAssetId}, dev_tools::fps_overlay::FpsOverlayPlugin, ecs::system::SystemIdMarker, log::{tracing_subscriber::Layer, BoxedLayer, LogPlugin}, prelude::*, reflect::TypeRegistry, render::camera::Viewport, window::PrimaryWindow
+    asset::{ReflectAsset, UntypedAssetId}, ecs::system::SystemIdMarker, input_focus::InputDispatchPlugin, log::{tracing_subscriber::Layer, BoxedLayer, LogPlugin}, prelude::*, reflect::TypeRegistry, render::camera::Viewport, window::PrimaryWindow
 };
 use bevy_enhanced_input::{
     EnhancedInputPlugin,
@@ -66,6 +66,7 @@ fn main() -> AppExit {
                     // level: bevy::log::Level::DEBUG,
                     ..default()
                 }),
+            InputDispatchPlugin,
             // FpsOverlayPlugin::default(),
             EguiPlugin {
                 enable_multipass_for_primary_context: true,

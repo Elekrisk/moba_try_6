@@ -1,20 +1,12 @@
 use crate::{
-    GameState, LobbySender, Options,
-    network::{ConnectToLobbyCommand, LobbyConnectionFailed},
-    new_ui::{
-        View, ViewExt,
-        button::ButtonView,
-        container::ContainerView,
-        list::ListView,
-        subtree::SubtreeView,
-        tabbed::TabbedView,
-        text::TextView,
-        tree::{OnceRunner, UiTree},
-    },
+    network::{ConnectToLobbyCommand, LobbyConnectionFailed}, new_ui::{
+        button::ButtonView, container::ContainerView, custom::{CustomView, CustomWidget}, list::ListView, subtree::SubtreeView, tabbed::TabbedView, text::TextView, text_edit::{TextEdit, TextEditView}, tree::{OnceRunner, UiTree}, View, ViewExt
+    }, GameState, LobbySender, Options
 };
-use bevy::{prelude::*, state::state::FreelyMutableState};
+use bevy::{input_focus::InputFocus, prelude::*, state::state::FreelyMutableState};
 use lobby_common::ClientToLobby;
 use lobby_list::connected_to_lobby_server;
+use crate::new_ui::Widget;
 
 mod in_champ_select;
 mod in_lobby;
@@ -68,8 +60,8 @@ pub fn create_ui(mut options: ResMut<Options>, mut commands: Commands) {
 }
 
 fn ui_root2() -> Option<impl View> {
-    Some(
-        TabbedView::new()
+
+    let tabbed = TabbedView::new()
             .with(
                 "Lobbies",
                 ContainerView::new(
@@ -85,7 +77,29 @@ fn ui_root2() -> Option<impl View> {
             .with("Settings", TextView::new("Waow, settings :D"))
             .styled()
             .width(Val::Percent(100.0))
-            .height(Val::Percent(100.0)),
+            .height(Val::Percent(100.0));
+
+    let root = CustomView {
+        data: tabbed,
+        build: Box::new(|tabbed, parent| {
+            let inner = tabbed.build(parent);
+            parent.commands().entity(inner.entity()).observe(|mut trigger: Trigger<Pointer<Click>>, mut input_focus: ResMut<InputFocus>| {
+                trigger.propagate(false);
+                input_focus.0 = None;
+            });
+            CustomWidget {
+                entity: inner.entity(),
+                parent: parent.target_entity(),
+                data: inner,
+            }
+        }),
+        rebuild: Box::new(|tabbed, prev, widget, commands| {
+            tabbed.rebuild(&prev.data, &mut widget.data, commands);
+        }),
+    };
+
+    Some(
+        root,
     )
 }
 
@@ -93,6 +107,8 @@ fn lobby_anchor2(state: Res<State<ConnectionState>>) -> Option<impl View + use<>
     if !state.is_changed() {
         return None;
     }
+
+    // Some(TextEditView::new("abc", ""))
 
     Some(match state.get() {
         ConnectionState::NotConnected => lobby_connection_screen2().boxed(),
@@ -112,13 +128,33 @@ fn lobby_anchor2(state: Res<State<ConnectionState>>) -> Option<impl View + use<>
     })
 }
 
+#[derive(Component, Debug, Default)]
+struct ConnectionAddr;
+
+#[derive(Resource)]
+struct LobbyUrl(String);
+
 fn lobby_connection_screen2() -> impl View {
+    // ListView::new()
+    //     .with(TextView::new("Connect to localhost?"))
+    //     .with(ButtonView::new(
+    //         TextView::new("Connect"),
+    //         "connect",
+    //         set_state(ConnectionState::Connecting),
+    //     ))
+    //     .styled()
+    //     .flex_direction(FlexDirection::Column)
+
     ListView::new()
-        .with(TextView::new("Connect to localhost?"))
+        .with(ListView::new().with("Address:").with(TextEditView::<ConnectionAddr>::new("localhost", "")).styled().column_gap(Val::Px(10.0)))
         .with(ButtonView::new(
             TextView::new("Connect"),
             "connect",
-            set_state(ConnectionState::Connecting),
+            |text: Single<&TextEdit, With<ConnectionAddr>>, mut commands: Commands| {
+                let text = &text.text;
+                commands.insert_resource(LobbyUrl(text.clone()));
+                commands.set_state(ConnectionState::Connecting);
+            },
         ))
         .styled()
         .flex_direction(FlexDirection::Column)
@@ -128,8 +164,8 @@ fn connect(mut commands: Commands) {
     commands.set_state(ConnectionState::Connecting);
 }
 
-fn on_connect_start(mut commands: Commands) {
-    commands.queue(ConnectToLobbyCommand("localhost:54654".into()));
+fn on_connect_start(lobby_url: Res<LobbyUrl>, mut commands: Commands) {
+    commands.queue(ConnectToLobbyCommand(format!("{}:54654", lobby_url.0)));
     commands.add_observer(on_lobby_connection_error);
 }
 
