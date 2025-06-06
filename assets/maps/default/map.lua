@@ -7,6 +7,7 @@
 game.ensure_loaded("structures/nexus.lua")
 
 game.register_asset("./floor.png")
+game.register_asset("champs/example_champion/model.glb#Scene0")
 
 for asset=1, 5 do
     -- game.register_asset("dummy" .. asset .. ".dummy")
@@ -51,10 +52,14 @@ map.on_load = function()
     }
 
     -- test spawning a unit
-    game.spawn_unit {
-        proto = "walking_nexus",
-        position = { x = -42, y = 0 }
-    }
+    -- for i=1, 200 do
+        
+    --     game.spawn_unit {
+    --         proto = "walking_nexus",
+    --         position = { x = math.random(-50, 50), y = math.random(-50, 50) },
+    --         team = 1
+    --     }
+    -- end
 
     -- Spawning of turrets
     -- Spawning of terrain

@@ -67,7 +67,7 @@ fn main() -> AppExit {
                     ..default()
                 }),
             InputDispatchPlugin,
-            // FpsOverlayPlugin::default(),
+            bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
             EguiPlugin {
                 enable_multipass_for_primary_context: true,
             },

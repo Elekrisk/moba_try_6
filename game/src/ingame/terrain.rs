@@ -3,6 +3,10 @@ use std::path::PathBuf;
 
 use bevy::{
     asset::uuid::Uuid,
+    math::{
+        VectorSpace,
+        bounding::{Aabb2d, BoundingVolume},
+    },
     prelude::*,
 };
 use bevy_enhanced_input::prelude::*;
@@ -79,8 +83,9 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
             info!("Loading terrain from {}", args.file.display());
             let path = lua.path(&args.file);
             info!("Converted path is {}", path.display());
-            let terrain =
-                std::fs::read(format!("assets/{}", path.display())).map_err(LuaError::external)?;
+            let path1 = format!("assets/{}", path.display());
+            info!("Reading terrain from {path1}");
+            let terrain = std::fs::read(path1).map_err(LuaError::external)?;
             let mut terrain: Terrain = ron::de::from_bytes(&terrain).map_err(LuaError::external)?;
 
             if args.new_uuids.unwrap_or_default() {
@@ -97,6 +102,10 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
                         vertex.y = old.x;
                     }
                 }
+            }
+
+            for object in &mut terrain.objects {
+                object.update_aabb();
             }
 
             lua.world()
@@ -137,31 +146,42 @@ fn disable_input(mut action_sources: ResMut<ActionSources>) {
     action_sources.mouse_wheel = false;
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TerrainObject {
     pub uuid: Uuid,
     pub vertices: Vec<Vec2>,
+    #[serde(default = "default_aabb")]
+    pub aabb: Aabb2d,
+}
+
+fn default_aabb() -> Aabb2d {
+    Aabb2d::new(Vec2::ZERO, Vec2::ZERO)
 }
 
 impl TerrainObject {
     pub fn center(&self) -> Vec2 {
-        let mut left = f32::INFINITY;
-        let mut right = f32::NEG_INFINITY;
-        let mut top = f32::INFINITY;
-        let mut bot = f32::NEG_INFINITY;
+        // let mut left = f32::INFINITY;
+        // let mut right = f32::NEG_INFINITY;
+        // let mut top = f32::INFINITY;
+        // let mut bot = f32::NEG_INFINITY;
 
-        for vertex in &self.vertices {
-            left = vertex.x.min(left);
-            right = vertex.x.max(right);
-            top = vertex.y.min(top);
-            bot = vertex.y.max(bot);
-        }
+        // for vertex in &self.vertices {
+        //     left = vertex.x.min(left);
+        //     right = vertex.x.max(right);
+        //     top = vertex.y.min(top);
+        //     bot = vertex.y.max(bot);
+        // }
 
-        Vec2::new((left + right) / 2.0, (top + bot) / 2.0)
+        // Vec2::new((left + right) / 2.0, (top + bot) / 2.0)
+        self.aabb.center()
+    }
+
+    pub fn update_aabb(&mut self) {
+        self.aabb = Aabb2d::from_point_cloud(Vec2::ZERO, &self.vertices);
     }
 }
 
-#[derive(Resource, Default, Serialize, Deserialize)]
+#[derive(Resource, Clone, Default, Serialize, Deserialize)]
 pub struct Terrain {
     pub objects: Vec<TerrainObject>,
 }
@@ -324,6 +344,7 @@ fn draw_object(
     if let Some(uuid) = selected_object.0 {
         if let Some(object) = terrain.objects.iter_mut().find(|o| o.uuid == uuid) {
             object.vertices.push(mouse_pos.plane_pos);
+            object.update_aabb();
             return;
         } else {
             selected_object.0 = None;
@@ -334,6 +355,7 @@ fn draw_object(
     terrain.objects.push(TerrainObject {
         uuid,
         vertices: vec![mouse_pos.plane_pos],
+        aabb: Aabb2d::from_point_cloud(Vec2::ZERO, &[mouse_pos.plane_pos]),
     });
     selected_object.0 = Some(uuid);
 }
@@ -429,6 +451,7 @@ fn object_ui(
             .clicked()
         {
             object.vertices.pop();
+            object.update_aabb();
         }
 
         if ui.button("+").clicked() {
@@ -443,6 +466,7 @@ fn object_ui(
             };
 
             object.vertices.push(new_vertex);
+            object.update_aabb();
         }
 
         if Some(object.uuid) == selected_object.0 {

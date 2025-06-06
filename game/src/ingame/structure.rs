@@ -1,11 +1,11 @@
 
 use bevy::{asset::AssetPath, prelude::*};
-use lightyear::prelude::{AppComponentExt, ChannelDirection, ServerReplicate};
+use lightyear::prelude::{client::ComponentSyncMode, AppComponentExt, ChannelDirection, ServerReplicate};
 use lobby_common::Team;
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{ingame::{map::MapEntity, navmesh::TerrainData}, AppExt};
+use crate::{ingame::{map::MapEntity, navmesh::TerrainData, vision::SightRange}, AppExt};
 
 use super::{
     targetable::Health,
@@ -20,7 +20,8 @@ pub fn common(app: &mut App) {
         app.add_observer(on_insert_model);
     }
 
-    app.register_component::<Model>(ChannelDirection::ServerToClient);
+    app.register_component::<Model>(ChannelDirection::ServerToClient)
+        .add_interpolation(ComponentSyncMode::Once);
 }
 
 pub struct StructProto {
@@ -100,6 +101,7 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
                     TerrainData {
                         vertices,
                     },
+                    SightRange(25.0),
                     MapEntity,
                     ServerReplicate::default(),
                 ));
@@ -132,7 +134,7 @@ from_into_lua_table!(
     }
 );
 
-#[derive(Component, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Component, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Model(pub AssetPath<'static>);
 
 fn on_insert_model(

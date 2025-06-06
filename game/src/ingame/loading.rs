@@ -413,7 +413,14 @@ fn handle_resume_condition(
                 info!(" Thread registers asset {}", handle.path().unwrap());
                 // This isn't really a "resume condition"
                 // We add this handle to the UntypedAssetHolder, so that we can wait on it later
-                world.resource_mut::<UntypedAssetHolder>().add_asset(handle);
+                world.resource_mut::<UntypedAssetHolder>().add_asset(handle.clone());
+                // As a special case, any GLTF files that reference a label is also added without the label;
+                // this is to be able to extract the named animations from that file.
+                let asset_path = handle.path().unwrap();
+                if let Some(ext) = asset_path.get_full_extension() && ["gltf", "glb"].contains(&ext.as_str()) && asset_path.label().is_some() {
+                    let handle = world.resource::<AssetServer>().load_untyped(asset_path.path());
+                    world.resource_mut::<UntypedAssetHolder>().add_asset(handle);
+                }
                 // We resume the thread immediately
             }
             ResumeCondition::Immediately => {
@@ -454,7 +461,7 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
             // Graphical assets shouldn't be loaded on the server.
             // Right now, those are .glbs and .pngs.
             if let Some(ext) = path.0.path().extension()
-                && ["glb", "png"].contains(&ext.to_str().unwrap_or(""))
+                && ["gltf", "glb", "png"].contains(&ext.to_str().unwrap_or(""))
             {
                 info!("Skipping registering graphical asset {} on server", path.0);
                 return lua.create_userdata(ResumeCondition::Immediately);

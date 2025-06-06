@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use lightyear::{
     client::{config::ClientConfig, plugin::ClientPlugins},
     connection::netcode::PRIVATE_KEY_BYTES,
-    prelude::{server::ServerCommandsExt as _, *},
+    prelude::{client::ComponentSyncMode, server::ServerCommandsExt as _, *},
     server::{config::ServerConfig, plugin::ServerPlugins},
 };
 use lobby_common::Team;
@@ -59,12 +59,22 @@ pub fn server(app: &mut App) {
 
 pub fn common(app: &mut App) {
     if app.is_client() {
-        // app.add_plugins(
-        //     VisualInterpolationPlugin::<Transform>::default(),
-        // );
+        app.add_plugins(
+            client::VisualInterpolationPlugin::<Transform>::default(),
+        );
     }
     app.register_component::<Transform>(ChannelDirection::ServerToClient)
-        // .add_custom_interpolation(client::ComponentSyncMode::Full)
+        .add_interpolation(ComponentSyncMode::Full)
+        .add_interpolation_fn(|from, to, t| {
+            let trans = from.translation.lerp(to.translation, t);
+            let rot = from.rotation.slerp(to.rotation, t);
+            let scale = from.scale.lerp(to.scale, t);
+
+            Transform::default()
+                .with_translation(trans)
+                .with_rotation(rot)
+                .with_scale(scale)
+        })
         ;
     app.register_component::<Team>(ChannelDirection::ServerToClient);
 }

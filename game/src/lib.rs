@@ -12,7 +12,7 @@
 
 use std::{fmt::Display, path::PathBuf};
 
-use bevy::{asset::AssetLoader, platform::collections::HashMap, prelude::*};
+use bevy::{asset::AssetLoader, pbr::{VolumetricFog, VolumetricLight}, platform::collections::HashMap, prelude::*};
 
 mod r#async;
 mod ingame;
@@ -92,11 +92,14 @@ fn client_setup(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection::default()),
-        Transform::from_xyz(0.0, 55.0, 55.0).looking_at(Vec3::ZERO, Vec3::Y),
-        // Transform::from_xyz(0.0, 55.0, 0.0).looking_at(Vec3::ZERO, Vec3::new(-1.0, 0.0, -1.0).normalize())
+        Transform::from_xyz(0.0, 55.0, 35.0).looking_at(Vec3::ZERO, Vec3::Y),
+        // Transform::from_xyz(0.0, 55.0, 0.0).looking_at(Vec3::ZERO, Vec3::new(-1.0, 0.0, -1.0).normalize()),
+
+        VolumetricFog::default(),
     ));
     commands.spawn((
-        DirectionalLight { ..default() },
+        DirectionalLight { shadows_enabled: true, ..default() },
+        VolumetricLight,
         Transform::from_xyz(15.0, 15.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 }

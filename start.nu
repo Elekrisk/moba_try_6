@@ -8,7 +8,8 @@ def main [count: int, --special] {
     let prefix = $"(pwd)"
     let client = $"($prefix)/target/debug/client"
 
-    cargo build
+    cargo build --bin=client
+    cargo build --bin=server
 
     let rules = if $special {
         ["[" "workspace" "special:magic" "]"]

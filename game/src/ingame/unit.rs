@@ -1,43 +1,29 @@
-use core::f32;
-
+use super::{
+    lua::{AppLuaExt, AssetPathExt, LuaExt, Protos},
+    map::MapEntity,
+    structure::Model,
+};
+use crate::{
+    ingame::{lua::W, vision::{SightRange, VisibleBy}}, AppExt
+};
+use anyhow::anyhow;
 use bevy::{asset::AssetPath, prelude::*};
 use bevy_enhanced_input::prelude::*;
 use lightyear::prelude::*;
 use lobby_common::Team;
 use mlua::prelude::*;
-use vleue_navigator::prelude::*;
 
-use crate::{ingame::vision::VisibleBy, AppExt};
-
-use super::{
-    camera::MousePos,
-    lua::{AppLuaExt, AssetPathExt, LuaExt, Protos},
-    map::{MapEntity, MessageChannel},
-    structure::Model,
-};
+mod animation;
+mod movement;
 
 pub fn common(app: &mut App) {
+    app.add_plugins((movement::plugin, animation::plugin));
+
     app.register_trigger::<SetUnitMovementTarget>(ChannelDirection::ClientToServer);
     app.register_component::<MovementTarget>(ChannelDirection::ServerToClient);
-    app.register_component::<CurrentPath>(ChannelDirection::ServerToClient);
+    app.register_component::<Unit>(ChannelDirection::ServerToClient);
 
     app.init_resource::<Protos<UnitProto>>();
-
-    if app.is_client() {
-        app.add_input_context::<UnitControlContext>()
-            .add_observer(bind_input)
-            .add_observer(on_move_click)
-            .add_systems(Startup, |mut commands: Commands| {
-                commands.spawn(Actions::<UnitControlContext>::default());
-            })
-            .add_systems(Update, draw_current_path);
-        app.add_systems(Update, move_unit_along_path);
-    } else {
-        app.add_systems(FixedUpdate, unit_pathfinding);
-        app.add_systems(FixedUpdate, refresh_movement_target_on_navmesh_reload);
-        app.add_observer(on_set_unit_movement_target);
-        app.add_systems(FixedUpdate, move_unit_along_path);
-    }
 
     app.setup_lua(setup_lua);
 }
@@ -71,6 +57,7 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
                 Unit,
                 // MovementTarget(vec2(0.0, 0.0)),
                 // VisualInterpolateStatus::<Transform>::default(),
+                args.team,
                 MapEntity,
                 ServerReplicate::default(),
             ));
@@ -85,14 +72,35 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
 struct SpawnUnitArgs {
     proto: String,
     position: Vec2,
+    team: Team,
 }
 
 from_into_lua_table!(
     struct SpawnUnitArgs {
         proto: String,
         position: {W} Vec2,
+        team: {W} Team,
     }
 );
+
+impl FromLua for W<Team> {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        value
+            .as_integer()
+            .ok_or_else(|| anyhow!("Expected integer"))
+            .map(|i| i.try_into().map_err(anyhow::Error::from))
+            .flatten()
+            .map(Team)
+            .map(W)
+            .map_err(LuaError::external)
+    }
+}
+
+impl IntoLua for W<Team> {
+    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
+        self.0.0.into_lua(lua)
+    }
+}
 
 struct UnitProto {
     id: String,
@@ -109,7 +117,7 @@ struct UnitProto {
 
 /// Marker struct for units
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-#[require(VisibleBy)]
+#[require(VisibleBy, SightRange = SightRange(10.0))]
 pub struct Unit;
 
 /// Where this unit currently wants to go
@@ -125,198 +133,3 @@ pub struct ControlledByClient(pub ClientId);
 
 #[derive(Resource, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MyTeam(pub Team);
-
-// --- CLIENT ---
-
-#[derive(InputContext)]
-pub struct UnitControlContext;
-
-#[derive(Debug, InputAction)]
-#[input_action(output = bool)]
-pub struct MoveClick;
-
-fn bind_input(
-    trigger: Trigger<Binding<UnitControlContext>>,
-    mut actions: Query<&mut Actions<UnitControlContext>>,
-) {
-    let mut actions = actions.get_mut(trigger.target()).unwrap();
-    actions
-        .bind::<MoveClick>()
-        .to(MouseButton::Right)
-        .with_conditions(Pulse::new(0.25));
-}
-
-fn on_move_click(
-    _trigger: Trigger<Fired<MoveClick>>,
-    mouse_pos: Res<MousePos>,
-    mut commands: Commands,
-) {
-    commands.client_trigger::<MessageChannel>(SetUnitMovementTarget(mouse_pos.plane_pos));
-}
-
-// --- SERVER ---
-
-fn on_set_unit_movement_target(
-    event: Trigger<FromClients<SetUnitMovementTarget>>,
-    // mut unit: Single<&mut MovementTarget>,
-    unit: Query<(Entity, &ControlledByClient), With<Unit>>,
-    mut commands: Commands,
-) {
-    // let client = event.from();
-
-    // We need some way to get the currently controlled unit for this player.
-    for (unit, client) in &unit {
-        if client.0 == event.from {
-            commands
-                .entity(unit)
-                .insert(MovementTarget(event.message.0));
-        }
-    }
-}
-
-// --- COMMON ---
-
-fn refresh_movement_target_on_navmesh_reload(
-    units: Query<&mut MovementTarget>,
-    navmesh: Single<(&ManagedNavMesh, Ref<NavMeshStatus>)>,
-) {
-    if navmesh.1.is_changed() {
-        for mut unit in units {
-            unit.set_changed();
-        }
-    }
-}
-
-fn unit_pathfinding(
-    mut units: Query<
-        (
-            Entity,
-            &Transform,
-            &MovementTarget,
-            Option<&mut CurrentPath>,
-        ),
-        Changed<MovementTarget>,
-    >,
-    navmesh: Single<(&ManagedNavMesh, Ref<NavMeshStatus>)>,
-    assets: Res<Assets<NavMesh>>,
-    // mut gizmos: Gizmos,
-    mut commands: Commands,
-) {
-    let navmesh = navmesh.0;
-    let Some(navmesh) = assets.get(navmesh) else {
-        return;
-    };
-
-    for (e, trans, target, cur_path) in &mut units {
-        let end = vec3(target.0.x, 0.0, target.0.y);
-
-        let local_end = navmesh.world_to_mesh().transform_point3(end).xy();
-
-        // let Some(end) = navmesh.get().get_closest_point(local_end.xy()) else {
-        //     return;
-        // };
-
-        let mut closest_point = vec2(f32::INFINITY, f32::INFINITY);
-        let mut closest_dist = f32::INFINITY;
-
-        if navmesh.is_in_mesh(local_end) {
-            closest_point = local_end
-        } else {
-            let layer = &navmesh.get().layers[0];
-            for polygon in &layer.polygons {
-                for [a, b] in polygon
-                    .vertices
-                    .array_windows()
-                    .copied()
-                    .chain(std::iter::once([
-                        polygon.vertices[0],
-                        *polygon.vertices.last().unwrap(),
-                    ]))
-                {
-                    let a_vert = &layer.vertices[a as usize];
-                    let b_vert = &layer.vertices[b as usize];
-
-                    let segment = Segment2d::new(a_vert.coords, b_vert.coords);
-                    let segment_relative = local_end - segment.point1();
-                    let scalar_proj = segment_relative.dot(segment.direction().as_vec2());
-
-                    let scalar_proj = scalar_proj.clamp(0.0, segment.length());
-
-                    let point = segment.point1() + segment.direction().as_vec2() * scalar_proj;
-
-                    let dist = point.distance_squared(local_end);
-                    if dist < closest_dist {
-                        closest_point = point;
-                        closest_dist = dist;
-                    }
-                }
-            }
-        }
-
-        if let Some(path) = navmesh.get().path(
-            navmesh
-                .world_to_mesh()
-                .transform_point3(trans.translation)
-                .xy(),
-            closest_point,
-        ) {
-            let path = path
-                .path
-                .iter()
-                .map(|vec2| navmesh.transform().transform_point(vec2.extend(0.0)))
-                .collect();
-            if let Some(mut cur_path) = cur_path {
-                cur_path.0 = path;
-            } else {
-                commands.entity(e).insert(CurrentPath(path));
-            }
-        }
-    }
-}
-
-#[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-struct CurrentPath(Vec<Vec3>);
-
-fn draw_current_path(units: Query<(&Transform, &CurrentPath, &Visibility)>, mut gizmos: Gizmos) {
-    for (trans, path, visible) in &units {
-        if path.0.is_empty() || *visible == Visibility::Hidden {
-            return;
-        }
-        let mut start = trans.translation;
-        start.y = 0.06;
-        for [a, b] in std::iter::once([start, *path.0.first().unwrap()])
-            .chain(path.0.array_windows().copied())
-        {
-            gizmos.line(a, b, Color::srgb(1.0, 0.0, 0.0));
-        }
-    }
-}
-
-fn move_unit_along_path(
-    mut units: Query<(Entity, &mut Transform, &mut CurrentPath)>,
-    time: Res<Time>,
-    mut commands: Commands,
-) {
-    let speed = 1.0;
-    for (e, mut trans, mut path) in &mut units {
-        let mut travel_dist = time.delta_secs() * speed;
-
-        while travel_dist > 0.00001 {
-            if let Some(next_step) = path.0.first() {
-                let pos = trans.translation;
-                let newpos = pos.move_towards(*next_step, travel_dist);
-                trans.translation = newpos;
-
-                let travelled_dist = pos.distance(newpos);
-                if trans.translation == *next_step {
-                    path.0.remove(0);
-                }
-
-                travel_dist -= travelled_dist;
-            } else {
-                commands.entity(e).remove::<CurrentPath>();
-                break;
-            }
-        }
-    }
-}

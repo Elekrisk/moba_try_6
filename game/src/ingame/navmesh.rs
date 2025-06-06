@@ -30,7 +30,7 @@ pub fn common(app: &mut App) {
     if app.is_client() {
         app.init_resource::<CurrentMeshEntity>()
             .register_type::<DrawNavmesh>()
-            .insert_resource(DrawNavmesh(true))
+            .insert_resource(DrawNavmesh(false))
             .add_systems(
                 Update,
                 (

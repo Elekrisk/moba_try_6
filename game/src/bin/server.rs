@@ -131,5 +131,15 @@ fn main() -> AppExit {
             StatesPlugin::default(),
             game::server,
         ))
+        .insert_resource(Timing(std::time::Instant::now()))
+        .add_systems(FixedFirst, |mut timing: ResMut<Timing>| {
+            timing.0 = std::time::Instant::now();
+        })
+        .add_systems(FixedLast, |timing: Res<Timing>| {
+            info!("Time taken: {:.3}", std::time::Instant::now().duration_since(timing.0).as_secs_f32());
+        })
         .run()
 }
+
+#[derive(Resource)]
+struct Timing(std::time::Instant);

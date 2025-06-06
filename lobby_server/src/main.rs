@@ -1171,6 +1171,7 @@ mod wee {
                     .args([
                         "run",
                         "--bin=server",
+                        // "--release",
                         "--",
                         &self.options.public_ipv4_address.to_string(),
                         &self.options.local_ipv4_address.to_string(),

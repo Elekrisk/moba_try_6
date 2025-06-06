@@ -1,6 +1,11 @@
 use std::path::PathBuf;
 
-use bevy::{asset::{AssetLoader, AssetPath}, ecs::system::RunSystemOnce, prelude::*};
+use bevy::{
+    asset::{AssetLoader, AssetPath},
+    ecs::system::RunSystemOnce,
+    pbr::FogVolume,
+    prelude::*,
+};
 use bevy_enhanced_input::{
     events::Fired,
     prelude::{Actions, Binding, InputAction, InputContext, InputContextAppExt, JustPress},
@@ -8,12 +13,18 @@ use bevy_enhanced_input::{
 use engine_common::{MapDef, MapId};
 use lightyear::prelude::{
     AppChannelExt, AppComponentExt, Channel, ReliableSettings, Replicated, ServerReplicate,
+    server::SyncTarget,
 };
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ingame::{structure::Model, unit::{ControlledByClient, Unit}}, AppExt, Players, ServerOptions
+    AppExt, Players, ServerOptions,
+    ingame::{
+        structure::Model,
+        unit::{ControlledByClient, Unit},
+        vision::FogOfWarTexture,
+    },
 };
 
 use super::{
@@ -127,7 +138,10 @@ impl Command for LoadMap {
 
         if let Some(on_load) = proto.on_load {
             lua.set_path(path);
-            lua.with_world(world, |_| on_load.call::<()>(())).unwrap();
+            match lua.with_world(world, |_| on_load.call::<()>(())) {
+                Ok(()) => {}
+                Err(e) => error!("Lua error: {e}"),
+            };
         } else {
             warn!("Map has no on_load!");
         }
@@ -138,6 +152,24 @@ impl Command for LoadMap {
         if world.contains_resource::<ServerOptions>() {
             info!("Load player units");
             world.commands().queue(SpawnPlayerUnits {})
+        } else {
+            info!("Spawn fog of war");
+            let fog_image = FogOfWarTexture::new(vec2(50.0, 50.0), world.resource::<AssetServer>());
+            world.spawn((
+                {
+                    let mut trans =
+                        Transform::from_scale(vec3(100.0, 100.0, 2.0)).with_translation(Vec3::Y);
+                    trans.rotate_local_x(90.0f32.to_radians());
+                    trans
+                },
+                FogVolume {
+                    density_factor: 1.0,
+                    scattering: 1.0,
+                    density_texture: Some(fog_image.0.clone()),
+                    ..default()
+                },
+            ));
+            world.insert_resource(fog_image);
         }
     }
 }
@@ -153,14 +185,23 @@ impl Command for SpawnPlayerUnits {
                 // This should use a champdefs spawn function in the future
                 world.spawn((
                     Transform::from_xyz(0.0, 0.0, 0.0),
-                    Model(AssetPath::parse("structures/nexus.glb#Scene0")),
+                    Model(AssetPath::parse("champs/example_champion/model.glb#Scene0")),
                     Unit,
                     player.team,
                     // MovementTarget(vec2(0.0, 0.0)),
-                    // VisualInterpolateStatus::<Transform>::default(),
+                    lightyear::prelude::client::VisualInterpolateStatus::<Transform> {
+                        trigger_change_detection: true,
+                        ..Default::default()
+                    },
                     ControlledByClient(player.client_id),
                     MapEntity,
-                    ServerReplicate::default(),
+                    ServerReplicate {
+                        sync: SyncTarget {
+                            // interpolation: lightyear::prelude::NetworkTarget::All,
+                            ..default()
+                        },
+                        ..default()
+                    },
                 ));
             }
         });
