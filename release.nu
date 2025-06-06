@@ -30,7 +30,7 @@ def cmp-version [a b] {
     return 0
 }
 
-def main [--version: string, --force, --inc] {
+def main [--version: string, --force, --inc, --itch, --release, --win] {
     # get latest itch.io version
     let latest_itch = (http get https://itch.io/api/1/x/wharf/latest?target=elekrisk/moba-try-6&channel_name=linux).latest | str substring 1..
 
@@ -57,6 +57,8 @@ def main [--version: string, --force, --inc] {
 
     print $"New version is ($version)"
 
+    let relflags = if $release { ["--release"] } else { [] }
+
     let result = cmp-version $version $latest_itch
     if $result <= 0 and not $force {
         print $"($version) is not newer than ($latest_itch), use --force to override"
@@ -67,32 +69,49 @@ def main [--version: string, --force, --inc] {
         return
     }
 
+    let $reldir = if $release { "release" } else { "debug" } 
+
     # First, compile for linux
-    cargo build --target-dir=target-linux --release --bin=client
-    cargo build --target-dir=target-linux --release --bin=server
-    cargo build --target-dir=target-linux --release --bin=lobby_server
+    cargo build --target-dir=target-linux ...$relflags --bin=client
+    cargo build --target-dir=target-linux ...$relflags --bin=server
+    cargo build --target-dir=target-linux ...$relflags --bin=lobby_server
     # Prepare release directory
+    rm -r --force release-linux
     mkdir release-linux
-    cp target-linux/release/client release-linux
-    cp target-linux/release/server release-linux
-    cp target-linux/release/lobby_server release-linux
+    cp $"target-linux/($reldir)/client" release-linux
+    cp $"target-linux/($reldir)/server" release-linux
+    cp $"target-linux/($reldir)/lobby_server" release-linux
     cp -r assets release-linux
 
-    # windows
-    cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu --release --bin=client
-    cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu --release --bin=server
-    cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu --release --bin=lobby_server
-    mkdir release-windows
-    cp target-windows/x86_64-pc-windows-gnu/release/client.exe release-windows
-    cp target-windows/x86_64-pc-windows-gnu/release/server.exe release-windows
-    cp target-windows/x86_64-pc-windows-gnu/release/lobby_server.exe release-windows
-    cp -r assets release-windows
+    if $win {
+        # windows
+        cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu ...$relflags --bin=client
+        cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu ...$relflags --bin=server
+        cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu ...$relflags --bin=lobby_server
+        # Prepare release directory
+        rm -r --force release-windows
+        mkdir release-windows
+        cp $"target-windows/x86_64-pc-windows-gnu/($reldir)/client.exe" release-windows
+        cp $"target-windows/x86_64-pc-windows-gnu/($reldir)/server.exe" release-windows
+        cp $"target-windows/x86_64-pc-windows-gnu/($reldir)/lobby_server.exe" release-windows
+        cp -r assets release-windows
+    }
 
     # push to itch.io
-    print "Pushing to itch.io"
-    butler push --fix-permissions --userversion $"v($version)" release-linux 'elekrisk/moba-try-6':linux
-    butler push --fix-permissions --userversion $"v($version)" release-windows 'elekrisk/moba-try-6':windows
+    if $itch and $release {
+        print "Pushing to itch.io"
+        butler push --fix-permissions --userversion $"v($version)" release-linux 'elekrisk/moba-try-6':linux
+        if $win {
+            butler push --fix-permissions --userversion $"v($version)" release-windows 'elekrisk/moba-try-6':windows
+        }
+    }
 
-    rm -r release-linux
-    rm -r release-windows
+    if $itch and not $release {
+        print "Will not push to itch.io without --release"
+    }
+
+    # push to server
+    # if $server {
+
+    # }
 }

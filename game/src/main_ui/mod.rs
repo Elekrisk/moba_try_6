@@ -8,9 +8,9 @@ use lobby_common::ClientToLobby;
 use lobby_list::connected_to_lobby_server;
 use crate::new_ui::Widget;
 
-mod in_champ_select;
-mod in_lobby;
-mod lobby_list;
+pub mod in_champ_select;
+pub mod in_lobby;
+pub mod lobby_list;
 
 pub fn client(app: &mut App) {
     app.insert_state(ConnectionState::NotConnected)
@@ -55,6 +55,7 @@ pub fn create_ui(mut options: ResMut<Options>, mut commands: Commands) {
     ));
     if options.connect {
         options.connect = false;
+        commands.insert_resource(LobbyUrl("localhost".into()));
         commands.run_system_cached(connect);
     }
 }

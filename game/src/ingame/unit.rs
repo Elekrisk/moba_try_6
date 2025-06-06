@@ -3,10 +3,11 @@ use core::f32;
 use bevy::{asset::AssetPath, prelude::*};
 use bevy_enhanced_input::prelude::*;
 use lightyear::prelude::*;
+use lobby_common::Team;
 use mlua::prelude::*;
 use vleue_navigator::prelude::*;
 
-use crate::AppExt;
+use crate::{ingame::vision::VisibleBy, AppExt};
 
 use super::{
     camera::MousePos,
@@ -108,6 +109,7 @@ struct UnitProto {
 
 /// Marker struct for units
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
+#[require(VisibleBy)]
 pub struct Unit;
 
 /// Where this unit currently wants to go
@@ -119,7 +121,10 @@ pub struct MovementTarget(pub Vec2);
 pub struct SetUnitMovementTarget(Vec2);
 
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ControlledByClient(ClientId);
+pub struct ControlledByClient(pub ClientId);
+
+#[derive(Resource, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MyTeam(pub Team);
 
 // --- CLIENT ---
 
@@ -154,17 +159,18 @@ fn on_move_click(
 fn on_set_unit_movement_target(
     event: Trigger<FromClients<SetUnitMovementTarget>>,
     // mut unit: Single<&mut MovementTarget>,
-    unit: Query<Entity, With<Unit>>,
+    unit: Query<(Entity, &ControlledByClient), With<Unit>>,
     mut commands: Commands,
 ) {
     // let client = event.from();
 
     // We need some way to get the currently controlled unit for this player.
-    // For now, we just assume it is ALL UNITS.
-    for unit in &unit {
-        commands
-            .entity(unit)
-            .insert(MovementTarget(event.message.0));
+    for (unit, client) in &unit {
+        if client.0 == event.from {
+            commands
+                .entity(unit)
+                .insert(MovementTarget(event.message.0));
+        }
     }
 }
 
@@ -271,9 +277,9 @@ fn unit_pathfinding(
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
 struct CurrentPath(Vec<Vec3>);
 
-fn draw_current_path(units: Query<(&Transform, &CurrentPath)>, mut gizmos: Gizmos) {
-    for (trans, path) in &units {
-        if path.0.is_empty() {
+fn draw_current_path(units: Query<(&Transform, &CurrentPath, &Visibility)>, mut gizmos: Gizmos) {
+    for (trans, path, visible) in &units {
+        if path.0.is_empty() || *visible == Visibility::Hidden {
             return;
         }
         let mut start = trans.translation;
@@ -291,11 +297,11 @@ fn move_unit_along_path(
     time: Res<Time>,
     mut commands: Commands,
 ) {
-    let speed = 10.0;
+    let speed = 1.0;
     for (e, mut trans, mut path) in &mut units {
         let mut travel_dist = time.delta_secs() * speed;
 
-        while travel_dist > 0.01 {
+        while travel_dist > 0.00001 {
             if let Some(next_step) = path.0.first() {
                 let pos = trans.translation;
                 let newpos = pos.move_towards(*next_step, travel_dist);

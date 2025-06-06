@@ -119,7 +119,7 @@ impl PlayerId {
 pub enum LobbyToServer {
     Handshake {
         settings: LobbySettings,
-        players: Vec<(PlayerGameInfo, bool)>,
+        players: Vec<PlayerGameInfo>,
     },
 }
 
@@ -134,4 +134,6 @@ pub struct PlayerGameInfo {
     pub name: String,
     pub team: Team,
     pub champ: ChampionId,
+    pub is_ipv4: bool,
+    pub is_local: bool,
 }

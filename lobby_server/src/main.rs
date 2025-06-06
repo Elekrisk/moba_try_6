@@ -4,9 +4,10 @@
 
 use std::{
     collections::HashMap,
-    net::IpAddr,
+    net::{Ipv4Addr, Ipv6Addr},
     ops::Deref,
     path::PathBuf,
+    process::exit,
     str::FromStr,
 };
 
@@ -36,7 +37,13 @@ struct OptionsBuilder {
     #[arg(long)]
     external_ports: Option<PortRange>,
     #[arg(long)]
-    local_address: Option<IpAddr>,
+    public_ipv4_address: Option<Ipv4Addr>,
+    #[arg(long)]
+    local_ipv4_address: Option<Ipv4Addr>,
+    #[arg(long)]
+    ipv6_address: Option<Ipv6Addr>,
+    #[arg(long)]
+    launch_mode: Option<LaunchMode>,
 }
 
 impl OptionsBuilder {
@@ -45,7 +52,12 @@ impl OptionsBuilder {
         self.privkey = other.privkey.or(self.privkey.take());
         self.internal_ports = other.internal_ports.or(self.internal_ports.take());
         self.external_ports = other.external_ports.or(self.external_ports.take());
-        self.local_address = other.local_address.or(self.local_address.take());
+        self.public_ipv4_address = other
+            .public_ipv4_address
+            .or(self.public_ipv4_address.take());
+        self.local_ipv4_address = other.local_ipv4_address.or(self.local_ipv4_address.take());
+        self.ipv6_address = other.ipv6_address.or(self.ipv6_address.take());
+        self.launch_mode = other.launch_mode.or(self.launch_mode.take());
     }
 
     fn build(self) -> anyhow::Result<Options> {
@@ -60,10 +72,16 @@ impl OptionsBuilder {
                 first: 54000,
                 last: 55000,
             }),
-            local_address: self
-                .local_address
-                .ok_or(())
-                .or_else(|_| local_ip_address::local_ip())?,
+            public_ipv4_address: self
+                .public_ipv4_address
+                .ok_or_else(|| anyhow!("Public ipv4 address not set"))?,
+            local_ipv4_address: self
+                .local_ipv4_address
+                .ok_or_else(|| anyhow!("Local ipv4 address not set"))?,
+            ipv6_address: self
+                .ipv6_address
+                .ok_or_else(|| anyhow!("Ipv6 address not set"))?,
+            launch_mode: self.launch_mode.unwrap_or_default()
         }))
     }
 }
@@ -75,7 +93,17 @@ struct Options {
     _privkey: Option<PathBuf>,
     internal_ports: PortRange,
     external_ports: PortRange,
-    local_address: IpAddr,
+    public_ipv4_address: Ipv4Addr,
+    local_ipv4_address: Ipv4Addr,
+    ipv6_address: Ipv6Addr,
+    launch_mode: LaunchMode,
+}
+
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
+pub enum LaunchMode {
+    Cargo,
+    #[default]
+    Executable,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -352,7 +380,8 @@ async fn main() {
     };
 
     let config = ServerConfig::builder()
-        .with_bind_default(54654)
+    .with_bind_config(wtransport::config::IpBindConfig::InAddrAnyV4, 54654)
+        // .with_bind_default(54654)
         .with_identity(identity)
         .max_idle_timeout(None)
         .unwrap()
@@ -371,7 +400,16 @@ async fn main() {
         }
     });
 
-    let mut state = State::new(sender, options.build().unwrap());
+    let mut state = State::new(
+        sender,
+        match options.build() {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Error: {e}");
+                exit(1)
+            }
+        },
+    );
 
     loop {
         match state.handle(&mut r).await {
@@ -408,12 +446,12 @@ mod wee {
         incoming: IncomingSession,
         s: UnboundedSender<InternalMessage>,
     ) -> Result<()> {
-        println!("Incoming connection");
+        println!("Incoming connection from {}", incoming.remote_address());
         let connection = incoming.await?;
         println!("Accepting connection...");
         let connection = connection.accept().await?;
         println!("Connection accepted");
-        println!("Waiting for application  handshake...");
+        println!("Waiting for application handshake...");
         match connection.recv::<ClientToLobby>().await {
             Ok(ClientToLobby::Handshake { name }) => {
                 println!("Application handshake received");
@@ -1128,16 +1166,29 @@ mod wee {
             };
 
             // Start game in some way
-            let mut child = Command::new("cargo")
-                .args([
-                    "run",
-                    "--bin=server",
-                    "--",
-                    &self.options.local_address.to_string(),
-                    &internal_port.to_string(),
-                    &external_port.to_string(),
-                ])
-                .spawn()?;
+            let mut child = match self.options.launch_mode {
+                LaunchMode::Cargo => Command::new("cargo")
+                    .args([
+                        "run",
+                        "--bin=server",
+                        "--",
+                        &self.options.public_ipv4_address.to_string(),
+                        &self.options.local_ipv4_address.to_string(),
+                        &self.options.ipv6_address.to_string(),
+                        &internal_port.to_string(),
+                        &external_port.to_string(),
+                    ])
+                    .spawn()?,
+                LaunchMode::Executable => Command::new("./server")
+                    .args([
+                        &self.options.public_ipv4_address.to_string(),
+                        &self.options.local_ipv4_address.to_string(),
+                        &self.options.ipv6_address.to_string(),
+                        &internal_port.to_string(),
+                        &external_port.to_string(),
+                    ])
+                    .spawn()?,
+            };
 
             self.used_internal_ports.insert(internal_port);
             self.used_external_ports.insert(external_port);
@@ -1167,28 +1218,28 @@ mod wee {
                     p.iter().map(move |p| {
                         let player = players.get(p).unwrap();
                         let addr = player.connection.remote_address();
-                        let use_global_addr = match addr {
+                        let (is_ipv4, is_local) = match addr {
                             std::net::SocketAddr::V4(socket_addr_v4) => {
-                                socket_addr_v4.ip().is_global()
+                                (true, !socket_addr_v4.ip().is_global())
                             }
-                            std::net::SocketAddr::V6(socket_addr_v6) => {
-                                socket_addr_v6.ip().is_global()
+                            std::net::SocketAddr::V6(socket_addr_v6) => (
+                                socket_addr_v6.ip().is_ipv4_mapped(),
+                                !(socket_addr_v6.ip().is_global()
                                     || socket_addr_v6
                                         .ip()
                                         .to_ipv4_mapped()
-                                        .is_some_and(|ip| ip.is_global())
-                            }
+                                        .is_some_and(|ip| ip.is_global())),
+                            ),
                         };
 
-                        (
-                            PlayerGameInfo {
-                                id: *p,
-                                name: players.get(p).unwrap().name.clone(),
-                                team: Team(i),
-                                champ: lobby.selected_champs.get(p).unwrap().id.clone(),
-                            },
-                            use_global_addr,
-                        )
+                        PlayerGameInfo {
+                            id: *p,
+                            name: players.get(p).unwrap().name.clone(),
+                            team: Team(i),
+                            champ: lobby.selected_champs.get(p).unwrap().id.clone(),
+                            is_ipv4,
+                            is_local,
+                        }
                     })
                 })
                 .collect();
@@ -1197,7 +1248,7 @@ mod wee {
 
             tokio::spawn(async move {
                 // Connect to server
-                let conn = Endpoint::client(
+                let conn = match Endpoint::client(
                     ClientConfig::builder()
                         .with_bind_default()
                         .with_no_cert_validation()
@@ -1206,7 +1257,13 @@ mod wee {
                 .unwrap()
                 .connect(format!("https://localhost:{internal_port}"))
                 .await
-                .unwrap();
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error connecting to game server: {e}");
+                        return;
+                    }
+                };
                 conn.send(LobbyToServer::Handshake { settings, players })
                     .await
                     .unwrap();

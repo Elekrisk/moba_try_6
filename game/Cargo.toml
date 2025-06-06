@@ -8,11 +8,11 @@ bevy = { version = "0.16", features = ["track_location", "ghost_nodes", "file_wa
 # Set max log levels. This helps avoid unwanted low-severity log spam, which can affect performance.
 log = { version = "0.4", features = [
     "max_level_debug",
-    "release_max_level_warn",
+    # "release_max_level_warn",
 ] }
 tracing = { version = "0.1", features = [
     "max_level_debug",
-    "release_max_level_warn",
+    # "release_max_level_warn",
 ] }
 lightyear = { version = "0.20.2", features = ["udp"] }
 xwt-core = "0.6.0"

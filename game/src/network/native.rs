@@ -4,21 +4,41 @@ use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt as _;
-use wtransport::{Connection, endpoint::endpoint_side::Client};
+use wtransport::{
+    Connection,
+    config::DnsResolver,
+    endpoint::endpoint_side::Client,
+};
 use xwt_wtransport::wtransport::{ClientConfig, Endpoint};
 
 use super::Sess;
 
 pub fn create_endpoint() -> Endpoint<Client> {
     let config = ClientConfig::builder()
-        .with_bind_default()
+        .with_bind_config(wtransport::config::IpBindConfig::InAddrAnyV4)
+        // .with_bind_default()
         .with_no_cert_validation()
+        .dns_resolver(CustomDnsResolver)
         .keep_alive_interval(Some(Duration::from_secs(1)))
         .max_idle_timeout(Some(Duration::from_secs(5)))
         .unwrap()
         .build();
 
     Endpoint::client(config).unwrap()
+}
+
+#[derive(Debug)]
+struct CustomDnsResolver;
+
+impl DnsResolver for CustomDnsResolver {
+    fn resolve(&self, host: &str) -> std::pin::Pin<Box<dyn wtransport::config::DnsLookupFuture>> {
+        let host = host.to_string();
+
+        Box::pin(async move {
+            let x = tokio::net::lookup_host(host).await?;
+            Ok(x.filter(|ip| ip.is_ipv4()).next())
+        })
+    }
 }
 
 pub async fn connect(address: String) -> anyhow::Result<Sess<xwt_wtransport::Connection>> {

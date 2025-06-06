@@ -1,5 +1,5 @@
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     time::Duration,
 };
 
@@ -48,7 +48,7 @@ pub fn server(app: &mut App) {
         net: vec![server::NetConfig::Netcode {
             config: server::NetcodeConfig::default().with_protocol_id(PROTOCOL_ID),
             io: server::IoConfig::from_transport(server::ServerTransport::UdpSocket(
-                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 54655)),
+                SocketAddr::V6(SocketAddrV6::new(Ipv6Addr::UNSPECIFIED, 54655, 0, 0)),
             )),
         }],
         ..default()
@@ -71,9 +71,9 @@ pub fn common(app: &mut App) {
 
 #[derive(Resource, clap::Parser)]
 pub struct ServerOptions {
-    #[arg(long)]
-    pub public_address: Option<IpAddr>,
-    pub local_address: IpAddr,
+    pub public_address_ipv4: Ipv4Addr,
+    pub local_address_ipv4: Ipv4Addr,
+    pub address_ipv6: Ipv6Addr,
     pub internal_port: u16,
     pub external_port: u16,
 }

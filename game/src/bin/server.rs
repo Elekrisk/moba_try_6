@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use bevy::{
     app::{ScheduleRunnerPlugin, TerminalCtrlCHandlerPlugin},
@@ -23,15 +23,6 @@ fn main() -> AppExit {
     let players = tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
-            let public_addr = if let Some(addr) = options.public_address {
-                println!("Using addr {}", addr);
-                addr
-            } else {
-                public_ip_address::perform_lookup(None).await.unwrap().ip
-            };
-
-            let local_addr = options.local_address;
-
             // Wait for connection from lobby server
             let server = Endpoint::server(
                 ServerConfig::builder()
@@ -50,7 +41,11 @@ fn main() -> AppExit {
             .unwrap();
 
             let conn = Sess(Arc::new(xwt_wtransport::Connection(
-                server.accept().await.await.unwrap().accept().await.unwrap(),
+                tokio::time::timeout(Duration::from_secs(5), async {
+                    server.accept().await.await.unwrap().accept().await.unwrap()
+                })
+                .await
+                .unwrap(),
             )));
 
             #[allow(irrefutable_let_patterns)]
@@ -66,17 +61,16 @@ fn main() -> AppExit {
 
             let mut player_infos = HashMap::new();
 
-            for (player, use_global_addr) in players {
+            for player in players {
                 let client_id = player.id.0.as_u64_pair().0;
+                let ip_addr: IpAddr = match (player.is_ipv4, player.is_local) {
+                    (true, true) => options.local_address_ipv4.into(),
+                    (true, false) => options.public_address_ipv4.into(),
+                    (false, _) => options.address_ipv6.into(),
+                };
+                println!("For player {}, use address {}", player.name, ip_addr);
                 let token = ConnectToken::build(
-                    (
-                        if use_global_addr {
-                            public_addr
-                        } else {
-                            local_addr
-                        },
-                        options.external_port,
-                    ),
+                    (ip_addr, options.external_port),
                     PROTOCOL_ID,
                     client_id,
                     private_key,

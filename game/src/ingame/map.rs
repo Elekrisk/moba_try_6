@@ -1,18 +1,20 @@
 use std::path::PathBuf;
 
-use bevy::{asset::AssetLoader, ecs::system::RunSystemOnce, prelude::*};
+use bevy::{asset::{AssetLoader, AssetPath}, ecs::system::RunSystemOnce, prelude::*};
 use bevy_enhanced_input::{
     events::Fired,
     prelude::{Actions, Binding, InputAction, InputContext, InputContextAppExt, JustPress},
 };
 use engine_common::{MapDef, MapId};
 use lightyear::prelude::{
-    AppChannelExt, AppComponentExt, Channel, ReliableSettings, Replicated,
+    AppChannelExt, AppComponentExt, Channel, ReliableSettings, Replicated, ServerReplicate,
 };
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::AppExt;
+use crate::{
+    ingame::{structure::Model, unit::{ControlledByClient, Unit}}, AppExt, Players, ServerOptions
+};
 
 use super::{
     lua::{AppLuaExt, LuaCtx, LuaExt, LuaScript, Protos},
@@ -111,7 +113,7 @@ impl Command for ResetRegistrations {
 }
 
 /// Loads the specified map.
-/// 
+///
 /// The map definition needs to have already been loaded from disk,
 /// and it's registration script needs to have been ran.
 #[derive(Clone)]
@@ -129,6 +131,39 @@ impl Command for LoadMap {
         } else {
             warn!("Map has no on_load!");
         }
+
+        // On the server, we want to spawn one unit per player
+        info!("On the server, load player units");
+
+        if world.contains_resource::<ServerOptions>() {
+            info!("Load player units");
+            world.commands().queue(SpawnPlayerUnits {})
+        }
+    }
+}
+
+pub struct SpawnPlayerUnits {}
+
+impl Command for SpawnPlayerUnits {
+    fn apply(self, world: &mut World) -> () {
+        // We need to get each player
+        world.resource_scope(|world, players: Mut<Players>| {
+            for player in players.players.values() {
+                // We always just spawn some random unit right now
+                // This should use a champdefs spawn function in the future
+                world.spawn((
+                    Transform::from_xyz(0.0, 0.0, 0.0),
+                    Model(AssetPath::parse("structures/nexus.glb#Scene0")),
+                    Unit,
+                    player.team,
+                    // MovementTarget(vec2(0.0, 0.0)),
+                    // VisualInterpolateStatus::<Transform>::default(),
+                    ControlledByClient(player.client_id),
+                    MapEntity,
+                    ServerReplicate::default(),
+                ));
+            }
+        });
     }
 }
 

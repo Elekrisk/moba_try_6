@@ -10,19 +10,20 @@ use lightyear::{
 use lobby_common::{PlayerId, Team};
 use serde::{Deserialize, Serialize};
 
-use crate::{GameState, ingame::map::MessageChannel};
+use crate::{ingame::{map::MessageChannel, unit::MyTeam}, main_ui::lobby_list::MyPlayerId, AppExt, GameState};
 
 #[macro_use]
 pub mod lua;
 pub mod camera;
-pub mod targetable;
 pub mod loading;
 pub mod map;
 pub mod navmesh;
 pub mod network;
 pub mod structure;
+pub mod targetable;
 pub mod terrain;
 pub mod unit;
+pub mod vision;
 
 pub fn client(app: &mut App) {
     app.add_plugins((network::client, camera::client, terrain::client))
@@ -45,6 +46,7 @@ pub fn common(app: &mut App) {
         navmesh::common,
         unit::common,
         loading::plugin,
+        vision::plugin,
     ));
 
     app.register_resource::<Players>(lightyear::prelude::ChannelDirection::ServerToClient);
@@ -52,6 +54,18 @@ pub fn common(app: &mut App) {
         commands
             .replicate_resource::<Players, MessageChannel>(lightyear::prelude::NetworkTarget::All);
     });
+
+    if app.is_client() {
+        app.add_systems(Update, players_added.run_if(resource_exists_and_changed::<Players>));
+    }
+}
+
+fn players_added(players: Res<Players>, my_id: Res<MyPlayerId>, mut commands: Commands) {
+    for player in players.players.values() {
+        if player.id == my_id.0 {
+            commands.insert_resource(MyTeam(player.team));
+        }
+    }
 }
 
 pub struct ConnectToGameServer(pub ConnectToken);
