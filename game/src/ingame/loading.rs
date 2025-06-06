@@ -1,4 +1,4 @@
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 
 use bevy::{
     asset::{AssetLoader, AssetPath, LoadedUntypedAsset}, color::palettes, platform::collections::{HashMap, HashSet}, prelude::*
@@ -708,9 +708,9 @@ impl AssetLoader for DummyAssetLoader {
     {
         async move {
             let x: u8 = std::random::random();
-            let secs = (x as f32 / 255.0) * 10.0;
+            let _secs = (x as f32 / 255.0) * 10.0;
             // tokio::time::sleep(Duration::from_secs_f32(secs)).await;
-            smol::unblock(move || std::thread::sleep(Duration::from_secs_f32(secs))).await;
+            // smol::unblock(move || std::thread::sleep(Duration::from_secs_f32(secs))).await;
             Ok(DummyAsset)
         }
     }

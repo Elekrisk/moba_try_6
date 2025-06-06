@@ -1,5 +1,8 @@
 target/
+target-windows/
+target-linux/
 .vscode/
 .cargo/config.toml
 logs/
 **/*.kra
+/release-*/

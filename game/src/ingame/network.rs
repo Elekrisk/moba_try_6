@@ -72,7 +72,8 @@ pub fn common(app: &mut App) {
 #[derive(Resource, clap::Parser)]
 pub struct ServerOptions {
     #[arg(long)]
-    pub address: Option<IpAddr>,
+    pub public_address: Option<IpAddr>,
+    pub local_address: IpAddr,
     pub internal_port: u16,
     pub external_port: u16,
 }

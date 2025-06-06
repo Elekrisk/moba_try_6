@@ -1,35 +1,100 @@
 #![feature(never_type)]
+#![feature(ip)]
+#![feature(impl_trait_in_assoc_type)]
 
-use std::{collections::HashMap, ops::{Deref, RangeInclusive}, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap,
+    net::IpAddr,
+    ops::Deref,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use anyhow::{Result, anyhow, bail};
 use lobby_common::{
     ClientToLobby, LobbyId, LobbyInfo, LobbyShortInfo, LobbyToClient, PlayerId, PlayerInfo, Team,
 };
 use serde::{Deserialize, Serialize};
-#[cfg(not(target_family = "wasm"))]
 use tokio::{
     io::AsyncReadExt as _,
     sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
 };
 use uuid::Uuid;
-#[cfg(not(target_family = "wasm"))]
 use wtransport::{
     Connection, Endpoint, Identity, ServerConfig,
     endpoint::{IncomingSession, endpoint_side::Server},
 };
 
-#[derive(clap::Parser)]
-struct Options {
+#[derive(Debug, Default, clap::Parser, Serialize, Deserialize)]
+struct OptionsBuilder {
     #[arg(long)]
     certificate: Option<PathBuf>,
     #[arg(long)]
     privkey: Option<PathBuf>,
-    internal_ports: W<RangeInclusive<u16>>,
-    external_ports: W<RangeInclusive<u16>>,
+    #[arg(long)]
+    internal_ports: Option<PortRange>,
+    #[arg(long)]
+    external_ports: Option<PortRange>,
+    #[arg(long)]
+    local_address: Option<IpAddr>,
 }
 
-#[derive(Clone, Copy)]
+impl OptionsBuilder {
+    fn apply(&mut self, other: OptionsBuilder) {
+        self.certificate = other.certificate.or(self.certificate.take());
+        self.privkey = other.privkey.or(self.privkey.take());
+        self.internal_ports = other.internal_ports.or(self.internal_ports.take());
+        self.external_ports = other.external_ports.or(self.external_ports.take());
+        self.local_address = other.local_address.or(self.local_address.take());
+    }
+
+    fn build(self) -> anyhow::Result<Options> {
+        Ok(dbg!(Options {
+            _certificate: self.certificate,
+            _privkey: self.privkey,
+            internal_ports: self.internal_ports.unwrap_or(PortRange {
+                first: 20000,
+                last: 21000,
+            }),
+            external_ports: self.external_ports.unwrap_or(PortRange {
+                first: 54000,
+                last: 55000,
+            }),
+            local_address: self
+                .local_address
+                .ok_or(())
+                .or_else(|_| local_ip_address::local_ip())?,
+        }))
+    }
+}
+
+#[derive(Debug)]
+struct Options {
+    // TODO: actually use these
+    _certificate: Option<PathBuf>,
+    _privkey: Option<PathBuf>,
+    internal_ports: PortRange,
+    external_ports: PortRange,
+    local_address: IpAddr,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+struct PortRange {
+    first: u16,
+    last: u16,
+}
+
+impl IntoIterator for PortRange {
+    type Item = u16;
+
+    type IntoIter = impl Iterator<Item = u16>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.first..=self.last
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 struct W<T>(T);
 
 impl<T> Deref for W<T> {
@@ -40,24 +105,23 @@ impl<T> Deref for W<T> {
     }
 }
 
-impl FromStr for W<RangeInclusive<u16>> {
+impl FromStr for PortRange {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.parse::<u16>() {
-            Ok(x) => Ok(W(x..=x)),
+            Ok(x) => Ok(Self { first: x, last: x }),
             Err(_) => match s.split_once('-') {
                 Some((a, b)) => match (a.parse(), b.parse()) {
-                    (Ok(a), Ok(b)) => Ok(W(a..=b)),
-                    _ => bail!("expected port (e.g. 4545) or port range (e.g. 4545-4555)")
+                    (Ok(a), Ok(b)) => Ok(Self { first: a, last: b }),
+                    _ => bail!("expected port (e.g. 4545) or port range (e.g. 4545-4555)"),
                 },
-                _ => bail!("expected port (e.g. 4545) or port range (e.g. 4545-4555)")
-            }
+                _ => bail!("expected port (e.g. 4545) or port range (e.g. 4545-4555)"),
+            },
         }
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
 enum InternalMessage {
     NewPlayer(Player),
     PlayerMessage {
@@ -71,17 +135,204 @@ enum InternalMessage {
     GameTokenCreated(PlayerId, Vec<u8>),
 }
 
-#[cfg(target_family = "wasm")]
-fn main() {
-    panic!("Cannot be run on the web");
-}
+// fn main() {
+//     let config = config::Config::builder()
+//         .add_source(config::File::with_name("lobby_server_config"))
+//         .add_source(config::Environment::with_prefix("LOBBY_SERVER"))
+//         .build()
+//         .unwrap();
 
-#[cfg(not(target_family = "wasm"))]
+//     eframe::run_native(
+//         "Moba Lobby Server",
+//         eframe::NativeOptions::default(),
+//         Box::new(|cc| {
+//             Ok(Box::new(MyEguiApp::new(
+//                 cc,
+//                 config.try_deserialize().unwrap_or_default(),
+//             )))
+//         }),
+//     )
+//     .unwrap();
+// }
+
+// struct MyEguiApp {
+//     config: Options,
+// }
+
+// impl Default for Options {
+//     fn default() -> Self {
+//         Self {
+//             certificate: Default::default(),
+//             privkey: Default::default(),
+//             internal_ports: PortRange {
+//                 first: 20000,
+//                 last: 21000,
+//             },
+//             external_ports: PortRange {
+//                 first: 54000,
+//                 last: 55000,
+//             },
+//         }
+//     }
+// }
+
+// impl MyEguiApp {
+//     fn new(cc: &eframe::CreationContext, config: Options) -> Self {
+//         Self { config }
+//     }
+// }
+
+// impl MyEguiApp {
+//     fn val_edit<T: ToString + FromStr>(
+//         ui: &mut Ui,
+//         value: &mut T,
+//         salt: impl Hash,
+//         error: &mut bool,
+//     ) where
+//         <T as FromStr>::Err: std::error::Error + Clone + Send + Sync + 'static,
+//     {
+//         let id = ui.id().with(salt);
+//         let mut start = ui.memory_mut(|mem| {
+//             mem.data
+//                 .get_temp::<String>(id)
+//                 .unwrap_or_else(|| value.to_string())
+//         });
+//         let response = ui.text_edit_singleline(&mut start);
+
+//         if response.changed() {
+//             ui.memory_mut(|mem| {
+//                 mem.data.insert_temp(id, start.clone());
+//             })
+//         }
+
+//         if response.lost_focus() {
+//             // Try to update config
+//             match start.parse::<T>() {
+//                 Ok(val) => {
+//                     // We clear any error
+//                     ui.memory_mut(|mem| mem.data.remove::<T::Err>(id));
+//                     *value = val;
+//                     // We also clear stored string memory, as it's only used while editing
+//                     ui.memory_mut(|mem| mem.data.remove::<String>(id));
+//                 }
+//                 Err(e) => {
+//                     // We store error
+//                     ui.memory_mut(|mem| mem.data.insert_temp(id, e));
+//                 }
+//             }
+//         }
+
+//         // If we have stored error, display it
+//         if let Some(err) = ui.memory(|mem| mem.data.get_temp::<T::Err>(id)) {
+//             ui.colored_label(Color32::LIGHT_RED, format!("{}", err));
+//             *error |= true;
+//         }
+//     }
+// }
+
+// impl eframe::App for MyEguiApp {
+//     fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
+//         egui::CentralPanel::default().show(ctx, |ui| {
+//             ui.heading("Lobby server");
+//             ui.heading("Config");
+
+//             let mut error = false;
+
+//             ui.horizontal(|ui| {
+//                 ui.label("Internal ports first");
+//                 Self::val_edit(
+//                     ui,
+//                     &mut self.config.internal_ports.first,
+//                     "internal_first",
+//                     &mut error,
+//                 );
+//             });
+//             ui.horizontal(|ui| {
+//                 ui.label("Internal ports last");
+//                 Self::val_edit(
+//                     ui,
+//                     &mut self.config.internal_ports.last,
+//                     "internal_last",
+//                     &mut error,
+//                 );
+//             });
+
+//             // Make consistent
+//             if self.config.internal_ports.last < self.config.internal_ports.first {
+//                 self.config.internal_ports.last = self.config.internal_ports.first;
+//             }
+
+//             let internal = self.config.internal_ports;
+
+//             let width = (internal.last - internal.first) as usize + 1;
+
+//             ui.label(format!(
+//                 "The internal range {}-{} allows for starting {} game servers simultaneously",
+//                 internal.first, internal.last, width
+//             ));
+//             ui.label("Note that an internal port is only reserved while the server is starting, and is not needed while the server is running. As such, having only one internal port reserved will not be a problem for most users.");
+
+//             ui.horizontal(|ui| {
+//                 ui.label("External ports first");
+//                 Self::val_edit(
+//                     ui,
+//                     &mut self.config.external_ports.first,
+//                     "external_first",
+//                     &mut error,
+//                 );
+//             });
+//             ui.horizontal(|ui| {
+//                 ui.label("External ports last");
+//                 Self::val_edit(
+//                     ui,
+//                     &mut self.config.external_ports.last,
+//                     "external_last",
+//                     &mut error,
+//                 );
+//             });
+
+//             // Make consistent
+//             if self.config.external_ports.last < self.config.external_ports.first {
+//                 self.config.external_ports.last = self.config.external_ports.first;
+//             }
+
+//             let external = self.config.external_ports;
+
+//             let width = (external.last - external.first) as usize + 1;
+
+//             ui.label(format!(
+//                 "The external range {}-{} allows for running {} game servers simultaneously",
+//                 external.first, external.last, width
+//             ));
+//             ui.label("Note that an external port is reserved while the server is running, and is held onto during the entire life time of the game server. As such, the external port range puts a hard limit on the amount of active game servers.");
+//         });
+//     }
+// }
+
 #[tokio::main]
 async fn main() {
     use clap::Parser;
 
-    let options = Options::parse();
+    let mut options = OptionsBuilder::parse();
+
+    let config = config::Config::builder()
+        .add_source(config::File::with_name("lobby_server_config"))
+        .add_source(config::Environment::with_prefix("LOBBY_SERVER"))
+        .build()
+        .unwrap();
+
+    let options2 = config.try_deserialize().unwrap_or_default();
+
+    options.apply(options2);
+
+    options.internal_ports.get_or_insert(PortRange {
+        first: 20000,
+        last: 21000,
+    });
+    options.external_ports.get_or_insert(PortRange {
+        first: 54000,
+        last: 55000,
+    });
 
     let identity = match (&options.certificate, &options.privkey) {
         (Some(cert_pemfile), Some(private_key_pemfile)) => {
@@ -120,7 +371,7 @@ async fn main() {
         }
     });
 
-    let mut state = State::new(sender, options);
+    let mut state = State::new(sender, options.build().unwrap());
 
     loop {
         match state.handle(&mut r).await {
@@ -130,10 +381,8 @@ async fn main() {
     }
 }
 
-#[cfg(not(target_family = "wasm"))]
 use wee::*;
 
-#[cfg(not(target_family = "wasm"))]
 mod wee {
     use std::{collections::HashSet, process::Command};
 
@@ -180,6 +429,7 @@ mod wee {
                     current_lobby: None,
                     connection: connection.clone(),
                 };
+
                 s.send(InternalMessage::NewPlayer(player))?;
                 tokio::spawn(listen_to_connection(player_id, connection, s.clone()));
             }
@@ -440,10 +690,10 @@ mod wee {
                 }
                 InternalMessage::InternalPortReleased(port) => {
                     self.used_internal_ports.remove(&port);
-                },
+                }
                 InternalMessage::ExternalPortReleased(port) => {
                     self.used_external_ports.remove(&port);
-                },
+                }
             }
 
             Ok(())
@@ -854,12 +1104,26 @@ mod wee {
 
             println!("Starting game server...");
 
-            let Some(internal_port) = self.options.internal_ports.0.clone().find(|p| !self.used_internal_ports.contains(p)) else {
-                _ = self.sender.send(InternalMessage::GameServerClosed(lobby_id));
+            let Some(internal_port) = self
+                .options
+                .internal_ports
+                .into_iter()
+                .find(|p| !self.used_internal_ports.contains(p))
+            else {
+                _ = self
+                    .sender
+                    .send(InternalMessage::GameServerClosed(lobby_id));
                 bail!("No internal port available");
             };
-            let Some(external_port) = self.options.external_ports.0.clone().find(|p| !self.used_external_ports.contains(p)) else {
-                _ = self.sender.send(InternalMessage::GameServerClosed(lobby_id));
+            let Some(external_port) = self
+                .options
+                .external_ports
+                .into_iter()
+                .find(|p| !self.used_external_ports.contains(p))
+            else {
+                _ = self
+                    .sender
+                    .send(InternalMessage::GameServerClosed(lobby_id));
                 bail!("No external port available");
             };
 
@@ -869,8 +1133,7 @@ mod wee {
                     "run",
                     "--bin=server",
                     "--",
-                    // "--address",
-                    // "127.0.0.1",
+                    &self.options.local_address.to_string(),
                     &internal_port.to_string(),
                     &external_port.to_string(),
                 ])
@@ -901,11 +1164,31 @@ mod wee {
                 .iter()
                 .enumerate()
                 .flat_map(|(i, p)| {
-                    p.iter().map(move |p| PlayerGameInfo {
-                        id: *p,
-                        name: players.get(p).unwrap().name.clone(),
-                        team: Team(i),
-                        champ: lobby.selected_champs.get(p).unwrap().id.clone(),
+                    p.iter().map(move |p| {
+                        let player = players.get(p).unwrap();
+                        let addr = player.connection.remote_address();
+                        let use_global_addr = match addr {
+                            std::net::SocketAddr::V4(socket_addr_v4) => {
+                                socket_addr_v4.ip().is_global()
+                            }
+                            std::net::SocketAddr::V6(socket_addr_v6) => {
+                                socket_addr_v6.ip().is_global()
+                                    || socket_addr_v6
+                                        .ip()
+                                        .to_ipv4_mapped()
+                                        .is_some_and(|ip| ip.is_global())
+                            }
+                        };
+
+                        (
+                            PlayerGameInfo {
+                                id: *p,
+                                name: players.get(p).unwrap().name.clone(),
+                                team: Team(i),
+                                champ: lobby.selected_champs.get(p).unwrap().id.clone(),
+                            },
+                            use_global_addr,
+                        )
                     })
                 })
                 .collect();

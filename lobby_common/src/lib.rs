@@ -119,7 +119,7 @@ impl PlayerId {
 pub enum LobbyToServer {
     Handshake {
         settings: LobbySettings,
-        players: Vec<PlayerGameInfo>,
+        players: Vec<(PlayerGameInfo, bool)>,
     },
 }
 

@@ -121,8 +121,6 @@ fn team(team: Team, players: &Vec<PlayerId>) -> impl View {
         players
             .iter()
             .copied()
-            .chain(std::iter::repeat(PlayerId::new()))
-            .take(5)
             .map(|p| player_slot(team, p)),
     )
     .styled()

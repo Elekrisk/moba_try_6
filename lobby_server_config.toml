@@ -1,0 +1,2 @@
+internal_ports = {first = 20000, last = 21000}
+external_ports = {first = 54000, last = 55000}

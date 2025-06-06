@@ -23,12 +23,14 @@ fn main() -> AppExit {
     let players = tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
-            let addr = if let Some(addr) = options.address {
+            let public_addr = if let Some(addr) = options.public_address {
                 println!("Using addr {}", addr);
                 addr
             } else {
                 public_ip_address::perform_lookup(None).await.unwrap().ip
             };
+
+            let local_addr = options.local_address;
 
             // Wait for connection from lobby server
             let server = Endpoint::server(
@@ -64,12 +66,23 @@ fn main() -> AppExit {
 
             let mut player_infos = HashMap::new();
 
-            for player in players {
+            for (player, use_global_addr) in players {
                 let client_id = player.id.0.as_u64_pair().0;
-                let token =
-                    ConnectToken::build((addr, options.external_port), PROTOCOL_ID, client_id, private_key)
-                        .generate()
-                        .unwrap();
+                let token = ConnectToken::build(
+                    (
+                        if use_global_addr {
+                            public_addr
+                        } else {
+                            local_addr
+                        },
+                        options.external_port,
+                    ),
+                    PROTOCOL_ID,
+                    client_id,
+                    private_key,
+                )
+                .generate()
+                .unwrap();
 
                 player_infos.insert(
                     player.id,
