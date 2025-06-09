@@ -2,4 +2,5 @@ ChampionDef(
     id: ChampionId("example_champion"),
     name: "Example Champion",
     icon: "champs/unknown.png",
+    script: "./champ.lua",
 )

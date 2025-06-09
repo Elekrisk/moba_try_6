@@ -4,11 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt as _;
-use wtransport::{
-    Connection,
-    config::DnsResolver,
-    endpoint::endpoint_side::Client,
-};
+use wtransport::{Connection, config::DnsResolver, endpoint::endpoint_side::Client};
 use xwt_wtransport::wtransport::{ClientConfig, Endpoint};
 
 use super::Sess;

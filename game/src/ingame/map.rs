@@ -8,7 +8,7 @@ use bevy::{
 };
 use bevy_enhanced_input::{
     events::Fired,
-    prelude::{Actions, Binding, InputAction, InputContext, InputContextAppExt, JustPress},
+    prelude::{Actions, Binding, InputAction, InputContext, InputContextAppExt, Press},
 };
 use engine_common::{MapDef, MapId};
 use lightyear::prelude::{
@@ -19,12 +19,12 @@ use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AppExt, Players, ServerOptions,
     ingame::{
         structure::Model,
-        unit::{ControlledByClient, Unit},
+        targetable::Health,
+        unit::{ControlledByClient, SpawnUnit, SpawnUnitArgs, Unit},
         vision::FogOfWarTexture,
-    },
+    }, AppExt, Players, ServerOptions
 };
 
 use super::{
@@ -181,28 +181,31 @@ impl Command for SpawnPlayerUnits {
         // We need to get each player
         world.resource_scope(|world, players: Mut<Players>| {
             for player in players.players.values() {
-                // We always just spawn some random unit right now
+                // TODO: We always just spawn some random unit right now
                 // This should use a champdefs spawn function in the future
-                world.spawn((
-                    Transform::from_xyz(0.0, 0.0, 0.0),
-                    Model(AssetPath::parse("champs/example_champion/model.glb#Scene0")),
-                    Unit,
-                    player.team,
-                    // MovementTarget(vec2(0.0, 0.0)),
-                    lightyear::prelude::client::VisualInterpolateStatus::<Transform> {
-                        trigger_change_detection: true,
-                        ..Default::default()
-                    },
-                    ControlledByClient(player.client_id),
-                    MapEntity,
-                    ServerReplicate {
-                        sync: SyncTarget {
-                            // interpolation: lightyear::prelude::NetworkTarget::All,
-                            ..default()
-                        },
-                        ..default()
-                    },
-                ));
+                // world.spawn((
+                //     Transform::from_xyz(0.0, 0.0, 0.0),
+                //     Model(AssetPath::parse("champs/example_champion/model.glb#Scene0")),
+                //     Unit,
+                //     player.team,
+                //     ControlledByClient(player.client_id),
+                //     MapEntity,
+                //     Health(100.0),
+                //     ServerReplicate {
+                //         sync: SyncTarget {
+                //             // interpolation: lightyear::prelude::NetworkTarget::All,
+                //             ..default()
+                //         },
+                //         ..default()
+                //     },
+                // ));
+
+                let id = SpawnUnit(SpawnUnitArgs {
+                    proto: player.champion.0.clone(),
+                    position: vec2(0.0, 0.0),
+                    team: player.team,
+                }).apply(world);
+                world.entity_mut(id).insert(ControlledByClient(player.client_id));
             }
         });
     }
@@ -330,5 +333,5 @@ fn bind_input(
     actions
         .bind::<ReloadMap>()
         .to(KeyCode::F10)
-        .with_conditions(JustPress::default());
+        .with_conditions(Press::default());
 }

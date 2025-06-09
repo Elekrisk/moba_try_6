@@ -1,12 +1,19 @@
 use std::{any::TypeId, fs::File, path::PathBuf, sync::OnceLock};
 
 use bevy::{
-    asset::{ReflectAsset, UntypedAssetId}, ecs::system::SystemIdMarker, input_focus::InputDispatchPlugin, log::{tracing_subscriber::Layer, BoxedLayer, LogPlugin}, prelude::*, reflect::TypeRegistry, render::camera::Viewport, window::PrimaryWindow
+    asset::{ReflectAsset, UntypedAssetId},
+    ecs::system::SystemIdMarker,
+    input_focus::InputDispatchPlugin,
+    log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
+    prelude::*,
+    reflect::TypeRegistry,
+    render::camera::Viewport,
+    window::PrimaryWindow,
 };
 use bevy_enhanced_input::{
     EnhancedInputPlugin,
     events::Fired,
-    prelude::{Actions, InputAction, InputContext, InputContextAppExt, JustPress},
+    prelude::{Actions, InputAction, InputContext, InputContextAppExt, Press},
 };
 use bevy_inspector_egui::{
     DefaultInspectorConfigPlugin,
@@ -19,7 +26,7 @@ use bevy_inspector_egui::{
 };
 use clap::Parser;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, egui};
-use game::{LobbySender, Options};
+use game::{LobbySender, Options, ServerFixedUpdateDuration, Unit};
 use lobby_common::ClientToLobby;
 
 use tracing_appender::non_blocking::WorkerGuard;
@@ -67,7 +74,7 @@ fn main() -> AppExit {
                     ..default()
                 }),
             InputDispatchPlugin,
-            bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
+            // bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
             EguiPlugin {
                 enable_multipass_for_primary_context: true,
             },
@@ -83,7 +90,7 @@ fn main() -> AppExit {
             actions
                 .bind::<ToggleInspector>()
                 .to(KeyCode::F3)
-                .with_conditions(JustPress::default());
+                .with_conditions(Press::default());
             commands.spawn(actions).observe(
                 |_: Trigger<Fired<ToggleInspector>>, mut r: ResMut<RunInspector>| {
                     r.0 = !r.0;
@@ -101,7 +108,60 @@ fn main() -> AppExit {
             })
             .after(bevy::window::exit_on_all_closed),
         )
+        .add_systems(Update, toggle_stat_display)
         .run()
+}
+
+#[derive(Component)]
+struct StatDisplay;
+
+#[derive(Component)]
+struct UnitText;
+#[derive(Component)]
+struct ServerUpdateText;
+
+fn toggle_stat_display(
+    input: Res<ButtonInput<KeyCode>>,
+    text: Option<Single<Entity, With<StatDisplay>>>,
+    unit_text: Option<Single<&mut Text, With<UnitText>>>,
+    server_update_text: Option<Single<&mut Text, (With<ServerUpdateText>, Without<UnitText>)>>,
+    units: Query<(), With<Unit>>,
+    server_update: Res<ServerFixedUpdateDuration>,
+    mut commands: Commands,
+) {
+    if input.just_pressed(KeyCode::F1) {
+        if let Some(text_entity) = text {
+            commands.entity(*text_entity).despawn();
+        } else {
+            commands
+                .spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        right: Val::Px(0.0),
+                        flex_direction: FlexDirection::Column,
+                        ..default()
+                    },
+                    StatDisplay,
+                ))
+                .with_child((Text::new("Units: ?"), UnitText))
+                .with_child((
+                    Text::new("Server tick duration: ?s\nServer tick rate: ?"),
+                    ServerUpdateText,
+                ));
+        }
+    } else {
+        if let Some(mut unit_text) = unit_text {
+            let len = units.iter().len();
+            unit_text.0 = format!("Units: {len}");
+        }
+        if let Some(mut server_update_text) = server_update_text {
+            server_update_text.0 = format!(
+                "Server tick duration: {:.4}s\nServer tick rate: {:.1}",
+                server_update.0,
+                (1.0 / server_update.0).min(20.0)
+            );
+        }
+    }
 }
 
 #[derive(Resource, PartialEq, Eq)]
@@ -303,11 +363,7 @@ impl EntityFilter for ComponentSearch {
 
     fn filter_entity(&self, world: &mut World, entity: Entity) -> bool {
         for comp in world.inspect_entity(entity).unwrap() {
-            if comp
-                .name()
-                .to_lowercase()
-                .contains(&self.component_name)
-            {
+            if comp.name().to_lowercase().contains(&self.component_name) {
                 return true;
             }
         }

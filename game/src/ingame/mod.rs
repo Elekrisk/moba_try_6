@@ -10,7 +10,11 @@ use lightyear::{
 use lobby_common::{PlayerId, Team};
 use serde::{Deserialize, Serialize};
 
-use crate::{ingame::{map::MessageChannel, unit::MyTeam}, main_ui::lobby_list::MyPlayerId, AppExt, GameState};
+use crate::{
+    AppExt, GameState,
+    ingame::{map::MessageChannel, unit::MyTeam},
+    main_ui::lobby_list::MyPlayerId,
+};
 
 #[macro_use]
 pub mod lua;
@@ -56,7 +60,20 @@ pub fn common(app: &mut App) {
     });
 
     if app.is_client() {
-        app.add_systems(Update, players_added.run_if(resource_exists_and_changed::<Players>));
+        app.add_systems(
+            Update,
+            players_added.run_if(resource_exists_and_changed::<Players>),
+        );
+
+        // TODO: Temporary until game menu is implemented
+        app.add_systems(
+            Update,
+            |input: Res<ButtonInput<KeyCode>>, mut commands: Commands| {
+                if input.just_pressed(KeyCode::Escape) {
+                    commands.disconnect_client();
+                }
+            },
+        );
     }
 }
 

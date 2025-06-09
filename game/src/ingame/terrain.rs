@@ -235,11 +235,11 @@ fn bind_terrain_edit_actions(
     actions
         .bind::<SelectTerrain>()
         .to(MouseButton::Left)
-        .with_conditions(JustPress::default());
+        .with_conditions(Press::default());
     actions
         .bind::<ToggleEditing>()
         .to(KeyCode::F4)
-        .with_conditions(JustPress::default());
+        .with_conditions(Press::default());
     actions.bind::<DragVertex>().to(MouseButton::Left);
 }
 

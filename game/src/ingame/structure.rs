@@ -1,15 +1,27 @@
-
-use bevy::{asset::AssetPath, prelude::*};
-use lightyear::prelude::{client::ComponentSyncMode, AppComponentExt, ChannelDirection, ServerReplicate};
+use bevy::{
+    asset::{AssetPath, uuid::Uuid},
+    prelude::*,
+};
+use lightyear::prelude::{
+    AppComponentExt, ChannelDirection, ServerReplicate, client::ComponentSyncMode,
+};
 use lobby_common::Team;
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{ingame::{map::MapEntity, navmesh::TerrainData, vision::SightRange}, AppExt};
+use crate::{
+    AppExt,
+    ingame::{
+        map::MapEntity,
+        navmesh::TerrainData,
+        unit::{UnitId, UnitProxy, effect::EffectList},
+        vision::SightRange,
+    },
+};
 
 use super::{
-    targetable::Health,
     lua::{AppLuaExt, AssetPathExt, LuaExt, Protos},
+    targetable::Health,
 };
 
 pub fn common(app: &mut App) {
@@ -20,8 +32,8 @@ pub fn common(app: &mut App) {
         app.add_observer(on_insert_model);
     }
 
-    app.register_component::<Model>(ChannelDirection::ServerToClient)
-        .add_interpolation(ComponentSyncMode::Once);
+    app.register_component::<Model>(ChannelDirection::ServerToClient);
+    app.register_component::<Structure>(ChannelDirection::ServerToClient);
 }
 
 pub struct StructProto {
@@ -64,7 +76,7 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
         "spawn_structure",
         lua.create_function(|lua: &Lua, args: SpawnStructureArgs| {
             let mut world = lua.world();
-            
+
             let (proto, path) = world.resource::<Protos<StructProto>>().get(&args.proto)?;
 
             // let asset_server = world.resource::<AssetServer>().clone();
@@ -93,24 +105,34 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
                     .map(|i| point_on_circle(vertex_step * i as f32) * proto.radius)
                     .collect::<Vec<_>>();
 
-                world.spawn((
-                    Transform::from_xyz(args.position.x, 0.0, args.position.y),
-                    Team(args.team),
-                    Health(proto.health),
-                    Model(path),
-                    TerrainData {
-                        vertices,
-                    },
-                    SightRange(25.0),
-                    MapEntity,
-                    ServerReplicate::default(),
-                ));
-            }
+                let id = world
+                    .spawn((
+                        Transform::from_xyz(args.position.x, 0.0, args.position.y),
+                        Team(args.team),
+                        Health(proto.health),
+                        Model(path),
+                        TerrainData { vertices },
+                        SightRange(25.0),
+                        MapEntity,
+                        Structure,
+                        UnitId(Uuid::new_v4()),
+                        ServerReplicate::default(),
+                    ))
+                    .id();
 
-            if lua.is_client() {
-                // let model = asset_server.load(path);
-
-                // entity.insert(SceneRoot(model));
+                // TODO: this should also somehow be ran on the client
+                // Possibly via some component onadd observer
+                if let Some(on_spawn) = proto.on_spawn {
+                    // Make sure to drop the world so that on_spawn can fetch it
+                    drop(world);
+                    let proxy = UnitProxy { entity: id };
+                    match on_spawn.call::<()>(proxy) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            error!("Lua error during structure {} spawn: {}", proto.id, e);
+                        }
+                    }
+                }
             }
 
             Ok(())
@@ -133,6 +155,10 @@ from_into_lua_table!(
         position: {W} Vec2,
     }
 );
+
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[require(EffectList)]
+pub struct Structure;
 
 #[derive(Component, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Model(pub AssetPath<'static>);

@@ -652,7 +652,7 @@ dependencies = [
  "bevy_transform",
  "bevy_utils",
  "blake3",
- "derive_more",
+ "derive_more 1.0.0",
  "downcast-rs 2.0.1",
  "either",
  "petgraph",
@@ -709,7 +709,7 @@ dependencies = [
  "bitflags 2.9.0",
  "blake3",
  "crossbeam-channel",
- "derive_more",
+ "derive_more 1.0.0",
  "disqualified",
  "downcast-rs 2.0.1",
  "either",
@@ -768,7 +768,7 @@ dependencies = [
  "bevy_math",
  "bevy_reflect",
  "bytemuck",
- "derive_more",
+ "derive_more 1.0.0",
  "encase",
  "serde",
  "thiserror 2.0.12",
@@ -874,7 +874,7 @@ dependencies = [
  "bitflags 2.9.0",
  "bumpalo",
  "concurrent-queue",
- "derive_more",
+ "derive_more 1.0.0",
  "disqualified",
  "fixedbitset",
  "indexmap",
@@ -945,9 +945,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_enhanced_input"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a73a9e5981b0b94b453a7b5ecdcb1f061da8dc8a9732683f5c55a9d887126d74"
+checksum = "e54cbf32f3dd047c0fe0ecfa7d126828e1fbd7869e862b6411e144c8be1b282c"
 dependencies = [
  "bevy",
  "bevy_enhanced_input_macros",
@@ -959,9 +959,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_enhanced_input_macros"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5f50d91e55d560d1341b6592f80434889b8002a765121f60b44084ca041af8a"
+checksum = "3fa85f75056068d2b457beb6213e58b05762324bd3dee325c9ac24e9100ba19f"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -1098,7 +1098,7 @@ dependencies = [
  "bevy_platform",
  "bevy_reflect",
  "bevy_utils",
- "derive_more",
+ "derive_more 1.0.0",
  "log",
  "serde",
  "smol_str",
@@ -1203,7 +1203,7 @@ checksum = "f1a3a926d02dc501c6156a047510bdb538dcb1fa744eeba13c824b73ba88de55"
 dependencies = [
  "approx",
  "bevy_reflect",
- "derive_more",
+ "derive_more 1.0.0",
  "glam",
  "itertools 0.14.0",
  "libm",
@@ -1272,7 +1272,7 @@ dependencies = [
  "bevy_window",
  "bitflags 2.9.0",
  "bytemuck",
- "derive_more",
+ "derive_more 1.0.0",
  "fixedbitset",
  "nonmax",
  "offset-allocator",
@@ -1343,7 +1343,7 @@ dependencies = [
  "bevy_ptr",
  "bevy_reflect_derive",
  "bevy_utils",
- "derive_more",
+ "derive_more 1.0.0",
  "disqualified",
  "downcast-rs 2.0.1",
  "erased-serde",
@@ -1400,7 +1400,7 @@ dependencies = [
  "bitflags 2.9.0",
  "bytemuck",
  "codespan-reporting",
- "derive_more",
+ "derive_more 1.0.0",
  "downcast-rs 2.0.1",
  "encase",
  "fixedbitset",
@@ -1451,7 +1451,7 @@ dependencies = [
  "bevy_render",
  "bevy_transform",
  "bevy_utils",
- "derive_more",
+ "derive_more 1.0.0",
  "serde",
  "thiserror 2.0.12",
  "uuid",
@@ -1480,7 +1480,7 @@ dependencies = [
  "bevy_window",
  "bitflags 2.9.0",
  "bytemuck",
- "derive_more",
+ "derive_more 1.0.0",
  "fixedbitset",
  "nonmax",
  "radsort",
@@ -1529,7 +1529,7 @@ dependencies = [
  "cfg-if",
  "concurrent-queue",
  "crossbeam-queue",
- "derive_more",
+ "derive_more 1.0.0",
  "futures-channel",
  "futures-lite",
  "heapless",
@@ -1595,7 +1595,7 @@ dependencies = [
  "bevy_reflect",
  "bevy_tasks",
  "bevy_utils",
- "derive_more",
+ "derive_more 1.0.0",
  "serde",
  "thiserror 2.0.12",
 ]
@@ -1627,7 +1627,7 @@ dependencies = [
  "bevy_utils",
  "bevy_window",
  "bytemuck",
- "derive_more",
+ "derive_more 1.0.0",
  "nonmax",
  "serde",
  "smallvec",
@@ -2546,7 +2546,16 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
 dependencies = [
- "derive_more-impl",
+ "derive_more-impl 1.0.0",
+]
+
+[[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl 2.0.1",
 ]
 
 [[package]]
@@ -2559,6 +2568,17 @@ dependencies = [
  "quote",
  "syn 2.0.101",
  "unicode-xid",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.101",
 ]
 
 [[package]]
@@ -3196,6 +3216,7 @@ dependencies = [
  "bevy-inspector-egui",
  "bevy_enhanced_input",
  "clap",
+ "derive_more 2.0.1",
  "egui_dock",
  "engine_common",
  "getrandom 0.3.3",
@@ -6228,8 +6249,7 @@ checksum = "57397d16646700483b67d2dd6511d79318f9d057fdbd21a4066aeac8b41d310a"
 [[package]]
 name = "ring"
 version = "0.17.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4689e6c2294d81e88dc6261c768b63bc4fcdb852be6d1352498b114f61383b7"
+source = "git+https://github.com/briansmith/ring#ebd75905b11300781c7a945d0447ff8fc16ac7dc"
 dependencies = [
  "cc",
  "cfg-if",

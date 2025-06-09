@@ -85,15 +85,15 @@ def main [--version: string, --force, --inc, --itch, --release, --win] {
 
     if $win {
         # windows
-        cross build --target-dir=target-windows --target=x86_64-pc-windows-msvc ...$relflags --bin=client
-        cross build --target-dir=target-windows --target=x86_64-pc-windows-msvc ...$relflags --bin=server
-        cross build --target-dir=target-windows --target=x86_64-pc-windows-msvc ...$relflags --bin=lobby_server
+        cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu ...$relflags --bin=client
+        cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu ...$relflags --bin=server
+        cross build --target-dir=target-windows --target=x86_64-pc-windows-gnu ...$relflags --bin=lobby_server
         # Prepare release directory
         rm -r --force release-windows
         mkdir release-windows
-        cp $"target-windows/x86_64-pc-windows-msvc/($reldir)/client.exe" release-windows
-        cp $"target-windows/x86_64-pc-windows-msvc/($reldir)/server.exe" release-windows
-        cp $"target-windows/x86_64-pc-windows-msvc/($reldir)/lobby_server.exe" release-windows
+        cp $"target-windows/x86_64-pc-windows-gnu/($reldir)/client.exe" release-windows
+        cp $"target-windows/x86_64-pc-windows-gnu/($reldir)/server.exe" release-windows
+        cp $"target-windows/x86_64-pc-windows-gnu/($reldir)/lobby_server.exe" release-windows
         cp -r assets release-windows
     }
 

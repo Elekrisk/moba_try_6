@@ -161,8 +161,7 @@ pub fn common(app: &mut App) {
         .init_resource::<ScriptInfoMap>()
         .register_asset_loader(LuaScriptLoader { lua })
         .init_asset::<LuaScript>()
-        .setup_lua(setup_lua)
-        ;
+        .setup_lua(setup_lua);
 }
 
 #[derive(Resource, Default, Debug, Reflect)]
@@ -176,7 +175,6 @@ pub struct ScriptInfo {
 }
 
 fn setup_lua(_lua: &Lua) -> LuaResult<()> {
-
     Ok(())
 }
 // #[derive(Component)]

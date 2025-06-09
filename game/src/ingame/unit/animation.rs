@@ -29,19 +29,24 @@ pub fn plugin(app: &mut App) {
                             let Some((_handle, anims)) = anims.map.get(&handle) else {
                                 continue;
                             };
-                            let anim = if path {
-                                let Some(anim) = anims.get("Moving") else {
-                                    warn!("GLTF doesn't have Moving animation");
-                                    continue;
-                                };
-                                *anim
-                            } else {
-                                let Some(anim) = anims.get("Idle") else {
-                                    warn!("GLTF doesn't have Idle animation");
-                                    continue;
-                                };
-                                *anim
+                            let Some(moving) = anims.get("Moving") else {
+                                warn!("GLTF doesn't have Moving animation");
+                                continue;
                             };
+                            let Some(idle) = anims.get("Idle") else {
+                                warn!("GLTF doesn't have Idle animation");
+                                continue;
+                            };
+
+                            if player
+                                .playing_animations()
+                                .filter(|(_, x)| !x.is_finished())
+                                .any(|(x, _)| x != moving && x != idle)
+                            {
+                                continue;
+                            }
+
+                            let &anim = if path { moving } else { idle };
 
                             if !player.is_playing_animation(anim) {
                                 player.stop_all();
@@ -54,6 +59,9 @@ pub fn plugin(app: &mut App) {
         );
     }
 }
+
+#[derive(Component)]
+pub struct AnimationPlayerProxy(pub Entity);
 
 pub(crate) fn attach_animation_controller(
     trigger: Trigger<SceneInstanceReady>,
@@ -88,7 +96,9 @@ pub(crate) fn attach_animation_controller(
 
         for e in children.iter_descendants(trigger.target()) {
             if let Ok(mut anim) = anim.get_mut(e) {
-                info!("Animation player found! {e}");
+                commands
+                    .entity(trigger.target())
+                    .insert(AnimationPlayerProxy(e));
                 // We add animation graph handle
                 commands
                     .entity(e)

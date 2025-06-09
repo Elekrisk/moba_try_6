@@ -1,7 +1,4 @@
-use bevy::{
-    prelude::*,
-    ui::experimental::GhostNode,
-};
+use bevy::{prelude::*, ui::experimental::GhostNode};
 
 fn main() -> AppExit {
     App::new()

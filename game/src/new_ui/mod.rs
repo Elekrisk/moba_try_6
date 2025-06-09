@@ -1,5 +1,5 @@
-use std::fmt::Debug;
 use std::any::Any;
+use std::fmt::Debug;
 
 use bevy::prelude::*;
 use scrollable::ScrollableView;
@@ -16,8 +16,8 @@ pub mod stylable;
 pub mod subtree;
 pub mod tabbed;
 pub mod text;
-pub mod tree;
 pub mod text_edit;
+pub mod tree;
 
 pub fn client(app: &mut App) {
     app.add_plugins((

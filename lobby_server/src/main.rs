@@ -44,6 +44,8 @@ struct OptionsBuilder {
     ipv6_address: Option<Ipv6Addr>,
     #[arg(long)]
     launch_mode: Option<LaunchMode>,
+    #[arg(long)]
+    release: Option<bool>,
 }
 
 impl OptionsBuilder {
@@ -58,6 +60,7 @@ impl OptionsBuilder {
         self.local_ipv4_address = other.local_ipv4_address.or(self.local_ipv4_address.take());
         self.ipv6_address = other.ipv6_address.or(self.ipv6_address.take());
         self.launch_mode = other.launch_mode.or(self.launch_mode.take());
+        self.release = other.release.or(self.release);
     }
 
     fn build(self) -> anyhow::Result<Options> {
@@ -81,7 +84,8 @@ impl OptionsBuilder {
             ipv6_address: self
                 .ipv6_address
                 .ok_or_else(|| anyhow!("Ipv6 address not set"))?,
-            launch_mode: self.launch_mode.unwrap_or_default()
+            launch_mode: self.launch_mode.unwrap_or_default(),
+            release: self.release.unwrap_or_default(),
         }))
     }
 }
@@ -97,9 +101,10 @@ struct Options {
     local_ipv4_address: Ipv4Addr,
     ipv6_address: Ipv6Addr,
     launch_mode: LaunchMode,
+    release: bool,
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
 pub enum LaunchMode {
     Cargo,
     #[default]
@@ -380,7 +385,7 @@ async fn main() {
     };
 
     let config = ServerConfig::builder()
-    .with_bind_config(wtransport::config::IpBindConfig::InAddrAnyV4, 54654)
+        .with_bind_config(wtransport::config::IpBindConfig::InAddrAnyV4, 54654)
         // .with_bind_default(54654)
         .with_identity(identity)
         .max_idle_timeout(None)
@@ -1165,31 +1170,54 @@ mod wee {
                 bail!("No external port available");
             };
 
-            // Start game in some way
-            let mut child = match self.options.launch_mode {
-                LaunchMode::Cargo => Command::new("cargo")
-                    .args([
-                        "run",
-                        "--bin=server",
-                        // "--release",
-                        "--",
-                        &self.options.public_ipv4_address.to_string(),
-                        &self.options.local_ipv4_address.to_string(),
-                        &self.options.ipv6_address.to_string(),
-                        &internal_port.to_string(),
-                        &external_port.to_string(),
-                    ])
-                    .spawn()?,
-                LaunchMode::Executable => Command::new("./server")
-                    .args([
-                        &self.options.public_ipv4_address.to_string(),
-                        &self.options.local_ipv4_address.to_string(),
-                        &self.options.ipv6_address.to_string(),
-                        &internal_port.to_string(),
-                        &external_port.to_string(),
-                    ])
-                    .spawn()?,
+            let mut cmd = match self.options.launch_mode {
+                LaunchMode::Cargo => Command::new("cargo"),
+                LaunchMode::Executable => Command::new("./server"),
             };
+
+            if self.options.launch_mode == LaunchMode::Cargo {
+                cmd.args(["run", "--bin=server"]);
+                if self.options.release {
+                    cmd.arg("--release");
+                }
+                cmd.arg("--");
+            }
+
+            let mut child = cmd
+                .args([
+                    &self.options.public_ipv4_address.to_string(),
+                    &self.options.local_ipv4_address.to_string(),
+                    &self.options.ipv6_address.to_string(),
+                    &internal_port.to_string(),
+                    &external_port.to_string(),
+                ])
+                .spawn()?;
+
+            // Start game in some way
+            // let mut child = match self.options.launch_mode {
+            //     LaunchMode::Cargo => Command::new("cargo")
+            //         .args([
+            //             "run",
+            //             "--bin=server",
+            //             // "--release",
+            //             "--",
+            //             &self.options.public_ipv4_address.to_string(),
+            //             &self.options.local_ipv4_address.to_string(),
+            //             &self.options.ipv6_address.to_string(),
+            //             &internal_port.to_string(),
+            //             &external_port.to_string(),
+            //         ])
+            //         .spawn()?,
+            //     LaunchMode::Executable => Command::new("./server")
+            //         .args([
+            //             &self.options.public_ipv4_address.to_string(),
+            //             &self.options.local_ipv4_address.to_string(),
+            //             &self.options.ipv6_address.to_string(),
+            //             &internal_port.to_string(),
+            //             &external_port.to_string(),
+            //         ])
+            //         .spawn()?,
+            // };
 
             self.used_internal_ports.insert(internal_port);
             self.used_external_ports.insert(external_port);

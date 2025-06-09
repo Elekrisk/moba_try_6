@@ -3,6 +3,7 @@ use std::sync::{mpmc, mpsc::TryRecvError};
 use bevy::{
     asset::RenderAssetUsages,
     ecs::{component::Tick, system::SystemChangeTick},
+    image::ImageSampler,
     math::bounding::{Aabb2d, Bounded2d, IntersectsVolume},
     platform::collections::HashSet,
     prelude::*,
@@ -366,8 +367,8 @@ pub struct FogOfWarTexture(pub Handle<Image>);
 impl FogOfWarTexture {
     pub fn new(size: Vec2, asset_server: &AssetServer) -> Self {
         let size1 = Extent3d {
-            width: 512,
-            height: 512,
+            width: 128,
+            height: 128,
             depth_or_array_layers: 1,
         };
         let image = Image::new_fill(

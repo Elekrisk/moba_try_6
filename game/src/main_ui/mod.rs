@@ -1,12 +1,23 @@
+use crate::new_ui::Widget;
 use crate::{
-    network::{ConnectToLobbyCommand, LobbyConnectionFailed}, new_ui::{
-        button::ButtonView, container::ContainerView, custom::{CustomView, CustomWidget}, list::ListView, subtree::SubtreeView, tabbed::TabbedView, text::TextView, text_edit::{TextEdit, TextEditView}, tree::{OnceRunner, UiTree}, View, ViewExt
-    }, GameState, LobbySender, Options
+    GameState, LobbySender, Options,
+    network::{ConnectToLobbyCommand, LobbyConnectionFailed},
+    new_ui::{
+        View, ViewExt,
+        button::ButtonView,
+        container::ContainerView,
+        custom::{CustomView, CustomWidget},
+        list::ListView,
+        subtree::SubtreeView,
+        tabbed::TabbedView,
+        text::TextView,
+        text_edit::{TextEdit, TextEditView},
+        tree::{OnceRunner, UiTree},
+    },
 };
 use bevy::{input_focus::InputFocus, prelude::*, state::state::FreelyMutableState};
 use lobby_common::ClientToLobby;
 use lobby_list::connected_to_lobby_server;
-use crate::new_ui::Widget;
 
 pub mod in_champ_select;
 pub mod in_lobby;
@@ -61,33 +72,34 @@ pub fn create_ui(mut options: ResMut<Options>, mut commands: Commands) {
 }
 
 fn ui_root2() -> Option<impl View> {
-
     let tabbed = TabbedView::new()
-            .with(
-                "Lobbies",
-                ContainerView::new(
-                    SubtreeView::new("lobby_anchor", lobby_anchor2)
-                        .styled()
-                        .width(Val::Percent(100.0)),
-                )
-                .styled()
-                .width(Val::Percent(100.0))
-                .flex_grow(1.0),
+        .with(
+            "Lobbies",
+            ContainerView::new(
+                SubtreeView::new("lobby_anchor", lobby_anchor2)
+                    .styled()
+                    .width(Val::Percent(100.0)),
             )
-            .with("Reference", TextView::new("Waow, reference :D"))
-            .with("Settings", TextView::new("Waow, settings :D"))
             .styled()
             .width(Val::Percent(100.0))
-            .height(Val::Percent(100.0));
+            .flex_grow(1.0),
+        )
+        .with("Reference", TextView::new("Waow, reference :D"))
+        .with("Settings", TextView::new("Waow, settings :D"))
+        .styled()
+        .width(Val::Percent(100.0))
+        .height(Val::Percent(100.0));
 
     let root = CustomView {
         data: tabbed,
         build: Box::new(|tabbed, parent| {
             let inner = tabbed.build(parent);
-            parent.commands().entity(inner.entity()).observe(|mut trigger: Trigger<Pointer<Click>>, mut input_focus: ResMut<InputFocus>| {
-                trigger.propagate(false);
-                input_focus.0 = None;
-            });
+            parent.commands().entity(inner.entity()).observe(
+                |mut trigger: Trigger<Pointer<Click>>, mut input_focus: ResMut<InputFocus>| {
+                    trigger.propagate(false);
+                    input_focus.0 = None;
+                },
+            );
             CustomWidget {
                 entity: inner.entity(),
                 parent: parent.target_entity(),
@@ -99,9 +111,7 @@ fn ui_root2() -> Option<impl View> {
         }),
     };
 
-    Some(
-        root,
-    )
+    Some(root)
 }
 
 fn lobby_anchor2(state: Res<State<ConnectionState>>) -> Option<impl View + use<>> {
@@ -147,7 +157,13 @@ fn lobby_connection_screen2() -> impl View {
     //     .flex_direction(FlexDirection::Column)
 
     ListView::new()
-        .with(ListView::new().with("Address:").with(TextEditView::<ConnectionAddr>::new("localhost", "")).styled().column_gap(Val::Px(10.0)))
+        .with(
+            ListView::new()
+                .with("Address:")
+                .with(TextEditView::<ConnectionAddr>::new("localhost", ""))
+                .styled()
+                .column_gap(Val::Px(10.0)),
+        )
         .with(ButtonView::new(
             TextView::new("Connect"),
             "connect",

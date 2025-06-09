@@ -2,15 +2,11 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use bevy::prelude::*;
-use lobby_common::{
-    ClientToLobby, LobbyToClient, PlayerId,
-};
+use lobby_common::{ClientToLobby, LobbyToClient, PlayerId};
 use serde::{Deserialize, Serialize};
 use tokio::{
     select,
-    sync::
-        mpsc::{self, UnboundedReceiver, UnboundedSender}
-    ,
+    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
 };
 use xwt_core::{
     base::Session,

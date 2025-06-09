@@ -9,7 +9,10 @@ use bevy::{
     state::app::StatesPlugin,
 };
 use clap::Parser;
-use game::{InGamePlayerInfo, PROTOCOL_ID, Players, PrivateKey, ServerOptions, Sess};
+use game::{
+    InGamePlayerInfo, PROTOCOL_ID, Players, PrivateKey, ServerFixedUpdateDuration, ServerOptions,
+    Sess,
+};
 use lightyear::prelude::{ClientId, ConnectToken, generate_key};
 use lobby_common::{LobbyToServer, ServerToLobby};
 use wtransport::{Endpoint, Identity, ServerConfig};
@@ -135,9 +138,15 @@ fn main() -> AppExit {
         .add_systems(FixedFirst, |mut timing: ResMut<Timing>| {
             timing.0 = std::time::Instant::now();
         })
-        .add_systems(FixedLast, |timing: Res<Timing>| {
-            info!("Time taken: {:.3}", std::time::Instant::now().duration_since(timing.0).as_secs_f32());
-        })
+        .add_systems(
+            FixedLast,
+            |timing: Res<Timing>, mut fixed_update: ResMut<ServerFixedUpdateDuration>| {
+                let time = std::time::Instant::now()
+                    .duration_since(timing.0)
+                    .as_secs_f32();
+                fixed_update.0 = time;
+            },
+        )
         .run()
 }
 

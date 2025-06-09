@@ -86,7 +86,7 @@ impl Styles {
                 .into_mut(),
         )
     }
-    
+
     #[allow(dead_code)]
     pub fn insert(&mut self, name: impl StyleLabel, style: Style) {
         self.styles.insert(name.label().into(), style);

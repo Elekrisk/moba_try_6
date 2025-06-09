@@ -2,9 +2,12 @@ use bevy::prelude::*;
 use lobby_common::{ClientToLobby, PlayerId, Team};
 
 use crate::{
-    main_ui::lobby_list::MyPlayerId, new_ui::{
-        button::ButtonView, image::ImageView, list::ListView, subtree::SubtreeView, tree::UiFunc, View, ViewExt
-    }, ChampDefs, LobbySender, Options
+    ChampDefs, LobbySender, Options,
+    main_ui::lobby_list::MyPlayerId,
+    new_ui::{
+        View, ViewExt, button::ButtonView, image::ImageView, list::ListView, subtree::SubtreeView,
+        tree::UiFunc,
+    },
 };
 
 use super::{
@@ -38,7 +41,12 @@ pub fn champ_select2() -> impl View {
         .width(Val::Percent(100.0))
 }
 
-fn champ_select3(lobby: Res<CurrentLobbyInfo>, mut options: ResMut<Options>, my_id: Res<MyPlayerId>, sender: Res<LobbySender>) -> Option<impl View + use<>> {
+fn champ_select3(
+    lobby: Res<CurrentLobbyInfo>,
+    mut options: ResMut<Options>,
+    my_id: Res<MyPlayerId>,
+    sender: Res<LobbySender>,
+) -> Option<impl View + use<>> {
     if !lobby.is_changed() {
         return None;
     }
@@ -117,15 +125,10 @@ fn team_pair(mut pair: impl Iterator<Item = (Team, &Vec<PlayerId>)>) -> impl Vie
 }
 
 fn team(team: Team, players: &Vec<PlayerId>) -> impl View {
-    ListView::from_iter(
-        players
-            .iter()
-            .copied()
-            .map(|p| player_slot(team, p)),
-    )
-    .styled()
-    .flex_direction(FlexDirection::Column)
-    .width(Val::Percent(33.0))
+    ListView::from_iter(players.iter().copied().map(|p| player_slot(team, p)))
+        .styled()
+        .flex_direction(FlexDirection::Column)
+        .width(Val::Percent(33.0))
 }
 
 fn player_slot(team: Team, player: PlayerId) -> impl View {
@@ -177,17 +180,18 @@ fn player_slot_2(team: Team, player: PlayerId) -> SubtreeView<impl UiFunc> {
     )
 }
 
-fn champ_select_buttons(res: Res<ChampDefs>, mut options: ResMut<Options>, sender: Res<LobbySender>) -> Option<impl View + use<>> {
+fn champ_select_buttons(
+    res: Res<ChampDefs>,
+    mut options: ResMut<Options>,
+    sender: Res<LobbySender>,
+) -> Option<impl View + use<>> {
     if !res.is_changed() {
         return None;
     }
 
     let mut list = ListView::new();
 
-    let mut champs = res
-        .map
-        .values()
-        .collect::<Vec<_>>();
+    let mut champs = res.map.values().collect::<Vec<_>>();
     champs.sort_by_key(|c| &c.name);
 
     if options.auto_pick_first_champ {

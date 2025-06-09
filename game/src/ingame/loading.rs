@@ -1,18 +1,24 @@
 use std::path::PathBuf;
 
 use bevy::{
-    asset::{AssetLoader, AssetPath, LoadedUntypedAsset}, color::palettes, platform::collections::{HashMap, HashSet}, prelude::*
+    asset::{AssetLoader, AssetPath, LoadedUntypedAsset},
+    color::palettes,
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
 };
 use engine_common::{ChampionDef, ChampionId, MapId};
 use lightyear::prelude::*;
 
 use crate::{
+    AppExt, GameState, InGamePlayerInfo, Players,
     ingame::{
         lua::{AppLuaExt, AssetPathExt, LuaCtx, LuaExt, LuaScript, ScriptCompleted, W},
         map::{LoadMap, MapDefAsset, MessageChannel},
-    }, new_ui::{
-        container::ContainerView, image::ImageView, list::ListView, tree::UiTree, View, ViewExt
-    }, AppExt, GameState, InGamePlayerInfo, Players
+        unit::champion::ChampionDefAsset,
+    },
+    new_ui::{
+        View, ViewExt, container::ContainerView, image::ImageView, list::ListView, tree::UiTree,
+    },
 };
 
 pub fn plugin(app: &mut App) {
@@ -97,6 +103,8 @@ pub fn plugin(app: &mut App) {
     app.setup_lua(setup_lua);
 
     app.add_systems(OnEnter(LoadingState::LoadCompleted), start_map_load);
+
+    app.add_systems(OnEnter(GameState::NotInGame), cleanup_loading);
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, SubStates)]
@@ -120,7 +128,7 @@ pub struct WhatToLoad {
 #[derive(Resource)]
 pub struct LoadHolder {
     map: Handle<MapDefAsset>,
-    champs: Vec<Handle<ChampionDef>>,
+    champs: Vec<Handle<ChampionDefAsset>>,
 }
 
 #[derive(Default, Resource)]
@@ -152,7 +160,7 @@ fn start_loading_what_to_load(
     let map = asset_server.load::<MapDefAsset>(format!("maps/{}/def.ron", what_to_load.map.0));
     let mut champs = vec![];
     for champ in &what_to_load.champs {
-        champs.push(asset_server.load::<ChampionDef>(format!("champs/{}/def.ron", champ.0)));
+        champs.push(asset_server.load::<ChampionDefAsset>(format!("champs/{}/def.ron", champ.0)));
     }
     let load_holder = LoadHolder { map, champs };
 
@@ -163,6 +171,7 @@ fn wait_until_loaded(
     holder: Res<LoadHolder>,
     asset_server: Res<AssetServer>,
     map_def_assets: Res<Assets<MapDefAsset>>,
+    champ_def_assets: Res<Assets<ChampionDefAsset>>,
     mut commands: Commands,
 ) {
     if asset_server.is_loaded_with_dependencies(&holder.map)
@@ -180,11 +189,20 @@ fn wait_until_loaded(
 
         info!("We start running the following scripts:");
 
+        let mut to_load = vec![];
+
         let map_def = map_def_assets.get(&holder.map).unwrap();
         info!(" {}", map_def.script.path().unwrap());
+        to_load.push(map_def.script.clone());
+
+        for champ in &holder.champs {
+            let champ_def = champ_def_assets.get(champ).unwrap();
+            info!(" {}", champ_def.script.path().unwrap());
+            to_load.push(champ_def.script.clone());
+        }
 
         commands.insert_resource(LuaRegistrationScriptRunningContext {
-            waiting_for_load: [map_def.script.clone()].into_iter().collect(),
+            waiting_for_load: to_load.into_iter().collect(),
             ..default()
         });
 
@@ -413,12 +431,19 @@ fn handle_resume_condition(
                 info!(" Thread registers asset {}", handle.path().unwrap());
                 // This isn't really a "resume condition"
                 // We add this handle to the UntypedAssetHolder, so that we can wait on it later
-                world.resource_mut::<UntypedAssetHolder>().add_asset(handle.clone());
+                world
+                    .resource_mut::<UntypedAssetHolder>()
+                    .add_asset(handle.clone());
                 // As a special case, any GLTF files that reference a label is also added without the label;
                 // this is to be able to extract the named animations from that file.
                 let asset_path = handle.path().unwrap();
-                if let Some(ext) = asset_path.get_full_extension() && ["gltf", "glb"].contains(&ext.as_str()) && asset_path.label().is_some() {
-                    let handle = world.resource::<AssetServer>().load_untyped(asset_path.path());
+                if let Some(ext) = asset_path.get_full_extension()
+                    && ["gltf", "glb"].contains(&ext.as_str())
+                    && asset_path.label().is_some()
+                {
+                    let handle = world
+                        .resource::<AssetServer>()
+                        .load_untyped(asset_path.path());
                     world.resource_mut::<UntypedAssetHolder>().add_asset(handle);
                 }
                 // We resume the thread immediately
@@ -574,6 +599,10 @@ fn start_map_load(what_to_load: Res<WhatToLoad>, mut commands: Commands) {
     commands.set_state(GameState::InGame);
 }
 
+fn cleanup_loading(mut commands: Commands) {
+    commands.remove_resource::<WhatToLoad>();
+}
+
 #[derive(Component)]
 struct LoadingScreenRoot;
 
@@ -657,10 +686,7 @@ fn loading_screen(
     )
 }
 
-fn player_loading(
-    player: &InGamePlayerInfo,
-    state: &ClientLoadState,
-) -> ListView {
+fn player_loading(player: &InGamePlayerInfo, state: &ClientLoadState) -> ListView {
     let player_name = player.name.clone();
     let mut player_thing = ListView::new();
     // TODO: show actual champ image
@@ -678,7 +704,7 @@ fn player_loading(
         )
         .styled()
         .width(Val::Percent(100.0))
-        .background_color(Color::Srgba(palettes::tailwind::GRAY_700))
+        .background_color(Color::Srgba(palettes::tailwind::GRAY_700)),
     );
     player_thing
 }

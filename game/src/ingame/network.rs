@@ -59,9 +59,7 @@ pub fn server(app: &mut App) {
 
 pub fn common(app: &mut App) {
     if app.is_client() {
-        app.add_plugins(
-            client::VisualInterpolationPlugin::<Transform>::default(),
-        );
+        app.add_plugins(client::VisualInterpolationPlugin::<Transform>::default());
     }
     app.register_component::<Transform>(ChannelDirection::ServerToClient)
         .add_interpolation(ComponentSyncMode::Full)
@@ -74,8 +72,7 @@ pub fn common(app: &mut App) {
                 .with_translation(trans)
                 .with_rotation(rot)
                 .with_scale(scale)
-        })
-        ;
+        });
     app.register_component::<Team>(ChannelDirection::ServerToClient);
 }
 

@@ -9,10 +9,16 @@
 #![feature(array_windows)]
 #![feature(never_type)]
 #![feature(random)]
+#![feature(try_blocks)]
 
 use std::{fmt::Display, path::PathBuf};
 
-use bevy::{asset::AssetLoader, pbr::{VolumetricFog, VolumetricLight}, platform::collections::HashMap, prelude::*};
+use bevy::{
+    asset::AssetLoader,
+    pbr::{VolumetricFog, VolumetricLight},
+    platform::collections::HashMap,
+    prelude::*,
+};
 
 mod r#async;
 mod ingame;
@@ -24,16 +30,18 @@ mod ui;
 pub use ingame::{
     InGamePlayerInfo, Players,
     network::{PROTOCOL_ID, PrivateKey, ServerOptions},
+    unit::Unit,
 };
 pub use network::Sess;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
-use lightyear::prelude::ServerConnectionManager;
+use lightyear::prelude::{AppResourceExt, ReplicateResourceExt, ServerConnectionManager};
 pub use network::LobbySender;
+use serde::{Deserialize, Serialize};
+
+use crate::ingame::{map::MessageChannel, unit::champion::ChampionDefAsset};
 
 pub fn client(app: &mut App) {
-    common(app);
-
     app.add_plugins((
         ui::client,
         new_ui::client,
@@ -48,11 +56,10 @@ pub fn client(app: &mut App) {
     } else {
         GameState::NotInGame
     });
+    common(app);
 }
 
 pub fn server(app: &mut App) {
-    common(app);
-
     app.add_plugins(ingame::server);
     app.insert_state(GameState::Loading);
     app.add_systems(
@@ -67,16 +74,25 @@ pub fn server(app: &mut App) {
             }
         },
     );
+    common(app);
 }
 
 fn common(app: &mut App) {
     app.add_plugins(r#async::common);
-    app.register_asset_loader(ChampionDefLoader)
-        .register_asset_loader(ChampDefsLoader)
-        .init_asset::<ChampionDef>()
+    app.register_asset_loader(ChampDefsLoader)
         .init_asset::<ChampDefsAsset>()
         .add_systems(Update, wait_for_list_load)
         .add_systems(Startup, load_champ_defs);
+
+    app.init_resource::<ServerFixedUpdateDuration>();
+    app.register_resource::<ServerFixedUpdateDuration>(
+        lightyear::prelude::ChannelDirection::ServerToClient,
+    );
+    app.add_systems(Startup, |mut commands: Commands| {
+        commands.replicate_resource::<ServerFixedUpdateDuration, MessageChannel>(
+            lightyear::prelude::NetworkTarget::All,
+        );
+    });
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
@@ -88,17 +104,23 @@ pub enum GameState {
     InGame,
 }
 
+#[derive(Component)]
+struct UiCameraMarker;
+
 fn client_setup(mut commands: Commands) {
     commands.spawn((
         Camera3d::default(),
         Projection::Perspective(PerspectiveProjection::default()),
         Transform::from_xyz(0.0, 55.0, 35.0).looking_at(Vec3::ZERO, Vec3::Y),
         // Transform::from_xyz(0.0, 55.0, 0.0).looking_at(Vec3::ZERO, Vec3::new(-1.0, 0.0, -1.0).normalize()),
-
         VolumetricFog::default(),
+        UiCameraMarker,
     ));
     commands.spawn((
-        DirectionalLight { shadows_enabled: true, ..default() },
+        DirectionalLight {
+            shadows_enabled: true,
+            ..default()
+        },
         VolumetricLight,
         Transform::from_xyz(15.0, 15.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
@@ -146,7 +168,7 @@ impl Display for LobbyMode {
 
 #[derive(Reflect, Asset)]
 struct ChampDefsAsset {
-    map: HashMap<String, Handle<ChampionDef>>,
+    map: HashMap<String, Handle<ChampionDefAsset>>,
 }
 
 #[derive(Resource)]
@@ -154,7 +176,7 @@ struct ChampDefsHandle(#[allow(dead_code)] Handle<ChampDefsAsset>);
 
 #[derive(Debug, Resource)]
 struct ChampDefs {
-    map: HashMap<ChampionId, ChampionDef>,
+    map: HashMap<ChampionId, ChampionDefAsset>,
 }
 
 fn load_champ_defs(server: Res<AssetServer>, mut commands: Commands) {
@@ -166,7 +188,7 @@ fn load_champ_defs(server: Res<AssetServer>, mut commands: Commands) {
 fn wait_for_list_load(
     mut event: EventReader<AssetEvent<ChampDefsAsset>>,
     assets: Res<Assets<ChampDefsAsset>>,
-    defs: Res<Assets<ChampionDef>>,
+    defs: Res<Assets<ChampionDefAsset>>,
     mut commands: Commands,
 ) {
     for e in event.read() {
@@ -186,36 +208,6 @@ fn wait_for_list_load(
             }
             _ => {}
         }
-    }
-}
-
-struct ChampionDefLoader;
-
-impl AssetLoader for ChampionDefLoader {
-    type Asset = ChampionDef;
-
-    type Settings = ();
-
-    type Error = anyhow::Error;
-
-    fn load(
-        &self,
-        reader: &mut dyn bevy::asset::io::Reader,
-        _settings: &Self::Settings,
-        _load_context: &mut bevy::asset::LoadContext,
-    ) -> impl bevy::tasks::ConditionalSendFuture<Output = std::result::Result<Self::Asset, Self::Error>>
-    {
-        async move {
-            let mut buf = vec![];
-            reader.read_to_end(&mut buf).await?;
-            let asset = ron::de::from_bytes(&buf)?;
-
-            Ok(asset)
-        }
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["ron"]
     }
 }
 
@@ -270,3 +262,6 @@ impl AppExt for App {
         self.world().contains_resource::<ServerOptions>()
     }
 }
+
+#[derive(Resource, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ServerFixedUpdateDuration(pub f32);

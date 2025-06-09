@@ -22,7 +22,7 @@ pub fn plugin(app: &mut App) {
 pub struct TextEditView<M> {
     initial: String,
     placeholder: String,
-    _marker: PhantomData<M>
+    _marker: PhantomData<M>,
 }
 
 impl<M> TextEditView<M> {
@@ -30,7 +30,7 @@ impl<M> TextEditView<M> {
         Self {
             initial: initial.into(),
             placeholder: placeholder.into(),
-            _marker: PhantomData
+            _marker: PhantomData,
         }
     }
 }

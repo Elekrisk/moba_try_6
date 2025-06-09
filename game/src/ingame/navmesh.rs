@@ -4,9 +4,11 @@ use bevy::prelude::*;
 use lightyear::prelude::{AppComponentExt, ChannelDirection, ServerReplicate};
 use serde::{Deserialize, Serialize};
 use vleue_navigator::{
+    NavMesh, Triangulation, VleueNavigatorPlugin,
     prelude::{
-        ManagedNavMesh, NavMeshSettings, NavMeshStatus, NavMeshUpdateMode, NavmeshUpdaterPlugin, ObstacleSource
-    }, NavMesh, Triangulation, VleueNavigatorPlugin
+        ManagedNavMesh, NavMeshSettings, NavMeshStatus, NavMeshUpdateMode, NavmeshUpdaterPlugin,
+        ObstacleSource,
+    },
 };
 
 use crate::AppExt;
@@ -117,7 +119,9 @@ fn display_mesh(
     navmesh: Single<(&ManagedNavMesh, Ref<NavMeshStatus>)>,
 ) {
     let (navmesh_handle, status) = navmesh.deref();
-    if !status.is_changed() || **status != NavMeshStatus::Built /*&& window_resized.is_empty()*/ {
+    if !status.is_changed() || **status != NavMeshStatus::Built
+    /*&& window_resized.is_empty()*/
+    {
         if current_mesh_entity.is_some() {
             return;
         }
@@ -169,7 +173,11 @@ impl ObstacleSource for TerrainData {
         let transform = obstacle_transform.compute_transform();
         let shift = transform.translation.xz();
 
-        let to_navmesh = |v: Vec2| inverse.transform_point3(vec3(v.x + shift.x, 0.0, v.y + shift.y)).xy();
+        let to_navmesh = |v: Vec2| {
+            inverse
+                .transform_point3(vec3(v.x + shift.x, 0.0, v.y + shift.y))
+                .xy()
+        };
 
         let vertices: Vec<Vec2> = self
             .vertices

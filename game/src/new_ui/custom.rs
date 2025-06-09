@@ -7,9 +7,11 @@ use super::{View, Widget};
 #[allow(dead_code)]
 pub struct CustomView<T: Debug, W> {
     pub data: T,
-    pub build:
-        Box<dyn FnMut(&mut T, &mut ChildSpawnerCommands) -> CustomWidget<W> + Send + Sync + 'static>,
-    pub rebuild: Box<dyn FnMut(&mut T, &Self, &mut CustomWidget<W>, Commands) + Send + Sync + 'static>,
+    pub build: Box<
+        dyn FnMut(&mut T, &mut ChildSpawnerCommands) -> CustomWidget<W> + Send + Sync + 'static,
+    >,
+    pub rebuild:
+        Box<dyn FnMut(&mut T, &Self, &mut CustomWidget<W>, Commands) + Send + Sync + 'static>,
 }
 
 impl<T: Debug, W> Debug for CustomView<T, W> {

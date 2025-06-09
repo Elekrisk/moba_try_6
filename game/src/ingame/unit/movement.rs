@@ -1,9 +1,16 @@
-use bevy_enhanced_input::prelude::*;
 use bevy::prelude::*;
+use bevy_enhanced_input::prelude::*;
 use lightyear::prelude::*;
+use lobby_common::Team;
 use vleue_navigator::prelude::*;
 
 use crate::AppExt;
+use crate::ingame::targetable::Health;
+use crate::ingame::unit::MyTeam;
+use crate::ingame::unit::UnitId;
+use crate::ingame::unit::attack::AutoAttackTarget;
+use crate::ingame::unit::attack::SetAutoAttackTarget;
+use crate::ingame::unit::stats::StatBlock;
 
 use super::MovementTarget;
 
@@ -27,7 +34,8 @@ pub fn plugin(app: &mut App) {
             .add_systems(Startup, |mut commands: Commands| {
                 commands.spawn(Actions::<UnitControlContext>::default());
             })
-            .add_systems(Update, draw_current_path);
+            // .add_systems(Update, draw_current_path)
+            ;
         app.add_systems(Update, move_unit_along_path);
     } else {
         app.add_systems(FixedUpdate, unit_pathfinding);
@@ -58,8 +66,18 @@ pub(crate) fn bind_input(
 pub(crate) fn on_move_click(
     _trigger: Trigger<Fired<MoveClick>>,
     mouse_pos: Res<MousePos>,
+    q: Query<(&UnitId, &GlobalTransform, &Team), With<Health>>,
+    my_team: Option<Res<MyTeam>>,
     mut commands: Commands,
 ) {
+    let Some(my_team) = my_team else { return };
+    // Check if we clicked on enemy
+    for (unit_id, trans, team) in q {
+        if *team != my_team.0 && trans.translation().xz().distance(mouse_pos.plane_pos) <= 0.5 {
+            commands.client_trigger::<MessageChannel>(SetAutoAttackTarget(*unit_id));
+            return;
+        }
+    }
     commands.client_trigger::<MessageChannel>(SetUnitMovementTarget(mouse_pos.plane_pos));
 }
 
@@ -76,6 +94,7 @@ pub(crate) fn on_set_unit_movement_target(
         if client.0 == event.from {
             commands
                 .entity(unit)
+                .remove::<AutoAttackTarget>()
                 .insert(MovementTarget(event.message.0));
         }
     }
@@ -175,6 +194,15 @@ pub(crate) fn unit_pathfinding(
             } else {
                 commands.entity(e).insert(CurrentPath(path));
             }
+        } else {
+            warn!(
+                "Pathfinding failed (from {} to {})",
+                navmesh
+                    .world_to_mesh()
+                    .transform_point3(trans.translation)
+                    .xy(),
+                closest_point
+            );
         }
     }
 }
@@ -182,7 +210,10 @@ pub(crate) fn unit_pathfinding(
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct CurrentPath(Vec<Vec3>);
 
-pub(crate) fn draw_current_path(units: Query<(&Transform, &CurrentPath, &Visibility)>, mut gizmos: Gizmos) {
+pub(crate) fn draw_current_path(
+    units: Query<(&Transform, &CurrentPath, &Visibility)>,
+    mut gizmos: Gizmos,
+) {
     for (trans, path, visible) in &units {
         if path.0.is_empty() || *visible == Visibility::Hidden {
             return;
@@ -198,12 +229,12 @@ pub(crate) fn draw_current_path(units: Query<(&Transform, &CurrentPath, &Visibil
 }
 
 pub(crate) fn move_unit_along_path(
-    mut units: Query<(Entity, &mut Transform, &mut CurrentPath)>,
+    mut units: Query<(Entity, &mut Transform, &mut CurrentPath, &StatBlock)>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
-    let speed = 2.0;
-    for (e, mut trans, mut path) in &mut units {
+    for (e, mut trans, mut path, stats) in &mut units {
+        let speed = stats.move_speed.base;
         let mut travel_dist = time.delta_secs() * speed;
 
         while travel_dist > 0.0001 {
@@ -213,7 +244,6 @@ pub(crate) fn move_unit_along_path(
                 let pos = trans.translation;
                 let newpos = pos.move_towards(*next_step, travel_dist);
                 trans.translation = newpos;
-
 
                 let travelled_dist = pos.distance(newpos);
                 if trans.translation == *next_step {
