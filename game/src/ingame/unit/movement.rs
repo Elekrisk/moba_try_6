@@ -4,12 +4,20 @@ use lightyear::prelude::*;
 use lobby_common::Team;
 use vleue_navigator::prelude::*;
 
+use crate::ingame::unit::attack::CurrentlyAutoAttacking;
 use crate::AppExt;
+use crate::ingame::lua::LuaCtx;
+use crate::ingame::lua::LuaExt;
+use crate::ingame::lua::Protos;
 use crate::ingame::targetable::Health;
 use crate::ingame::unit::MyTeam;
 use crate::ingame::unit::UnitId;
+use crate::ingame::unit::UnitProxy;
 use crate::ingame::unit::attack::AutoAttackTarget;
 use crate::ingame::unit::attack::SetAutoAttackTarget;
+use crate::ingame::unit::state::State;
+use crate::ingame::unit::state::StateList;
+use crate::ingame::unit::state::StateProto;
 use crate::ingame::unit::stats::StatBlock;
 
 use super::MovementTarget;
@@ -26,6 +34,9 @@ use super::super::camera::MousePos;
 
 pub fn plugin(app: &mut App) {
     app.register_component::<CurrentPath>(ChannelDirection::ServerToClient);
+
+    app.add_observer(on_movement_start);
+    app.add_observer(on_movement_end);
 
     if app.is_client() {
         app.add_input_context::<UnitControlContext>()
@@ -84,18 +95,31 @@ pub(crate) fn on_move_click(
 pub(crate) fn on_set_unit_movement_target(
     event: Trigger<FromClients<SetUnitMovementTarget>>,
     // mut unit: Single<&mut MovementTarget>,
-    unit: Query<(Entity, &ControlledByClient), With<Unit>>,
+    unit: Query<(Entity, &ControlledByClient, &StateList), With<Unit>>,
+    state_protos: Res<Protos<StateProto>>,
     mut commands: Commands,
 ) {
     // let client = event.from();
 
     // We need some way to get the currently controlled unit for this player.
-    for (unit, client) in &unit {
+    for (unit, client, state) in unit {
         if client.0 == event.from {
-            commands
-                .entity(unit)
-                .remove::<AutoAttackTarget>()
-                .insert(MovementTarget(event.message.0));
+            let (proto, _) = state_protos.get(&state.current_state().proto).unwrap();
+            if proto.move_cancellable {
+                commands
+                    .entity(unit)
+                    .remove::<(AutoAttackTarget, CurrentlyAutoAttacking)>()
+                    .insert(MovementTarget(event.message.0));
+
+                if let Some(on_cancel) = proto.on_move_cancel.clone() {
+                    commands.queue(move |world: &mut World| {
+                        let lua = world.resource::<LuaCtx>().0.clone();
+                        lua.with_world(world, |_| {
+                            on_cancel.call::<()>(UnitProxy { entity: unit }).unwrap();
+                        });
+                    });
+                }
+            }
         }
     }
 }
@@ -134,76 +158,97 @@ pub(crate) fn unit_pathfinding(
     for (e, trans, target, cur_path) in &mut units {
         let end = vec3(target.0.x, 0.0, target.0.y);
 
-        let local_end = navmesh.world_to_mesh().transform_point3(end).xy();
+        if let Some(path) = get_path(&mut commands, navmesh, e, trans, cur_path, end) {
+            commands.entity(e).insert(CurrentPath(path));
+        }
+    }
+}
 
-        // let Some(end) = navmesh.get().get_closest_point(local_end.xy()) else {
-        //     return;
-        // };
+fn get_path(
+    commands: &mut Commands<'_, '_>,
+    navmesh: &NavMesh,
+    e: Entity,
+    trans: &Transform,
+    cur_path: Option<Mut<'_, CurrentPath>>,
+    end: Vec3,
+) -> Option<Vec<Vec3>> {
+    let (closest_start, start_on_navmesh) = get_closest_point(navmesh, trans.translation);
+    let (closest_end, _end_on_navmesh) = get_closest_point(navmesh, end);
 
-        let mut closest_point = vec2(f32::INFINITY, f32::INFINITY);
-        let mut closest_dist = f32::INFINITY;
+    if let Some(path) = navmesh.get().path(closest_start, closest_end) {
+        let mut path: Vec<Vec3> = path
+            .path
+            .iter()
+            .map(|vec2| navmesh.transform().transform_point(vec2.extend(0.0)))
+            .collect();
+        // if let Some(mut cur_path) = cur_path {
+        //     cur_path.0 = path;
+        // } else {
+        //     commands.entity(e).insert(CurrentPath(path));
+        // }
 
-        if navmesh.is_in_mesh(local_end) {
-            closest_point = local_end
-        } else {
-            let layer = &navmesh.get().layers[0];
-            for polygon in &layer.polygons {
-                for [a, b] in polygon
-                    .vertices
-                    .array_windows()
-                    .copied()
-                    .chain(std::iter::once([
-                        polygon.vertices[0],
-                        *polygon.vertices.last().unwrap(),
-                    ]))
-                {
-                    let a_vert = &layer.vertices[a as usize];
-                    let b_vert = &layer.vertices[b as usize];
-
-                    let segment = Segment2d::new(a_vert.coords, b_vert.coords);
-                    let segment_relative = local_end - segment.point1();
-                    let scalar_proj = segment_relative.dot(segment.direction().as_vec2());
-
-                    let scalar_proj = scalar_proj.clamp(0.0, segment.length());
-
-                    let point = segment.point1() + segment.direction().as_vec2() * scalar_proj;
-
-                    let dist = point.distance_squared(local_end);
-                    if dist < closest_dist {
-                        closest_point = point;
-                        closest_dist = dist;
-                    }
-                }
-            }
+        if !start_on_navmesh {
+            path.insert(
+                0,
+                navmesh
+                    .transform()
+                    .transform_point(closest_start.extend(0.0)),
+            );
         }
 
-        if let Some(path) = navmesh.get().path(
+        Some(path)
+    } else {
+        warn!(
+            "Pathfinding failed (from {} to {})",
             navmesh
                 .world_to_mesh()
                 .transform_point3(trans.translation)
                 .xy(),
-            closest_point,
-        ) {
-            let path = path
-                .path
-                .iter()
-                .map(|vec2| navmesh.transform().transform_point(vec2.extend(0.0)))
-                .collect();
-            if let Some(mut cur_path) = cur_path {
-                cur_path.0 = path;
-            } else {
-                commands.entity(e).insert(CurrentPath(path));
+            closest_end
+        );
+        None
+    }
+}
+
+fn get_closest_point(navmesh: &NavMesh, end: Vec3) -> (Vec2, bool) {
+    let local_end = navmesh.world_to_mesh().transform_point3(end).xy();
+
+    let mut closest_point = vec2(f32::INFINITY, f32::INFINITY);
+    let mut closest_dist = f32::INFINITY;
+
+    if navmesh.is_in_mesh(local_end) {
+        (local_end, true)
+    } else {
+        let layer = &navmesh.get().layers[0];
+        for polygon in &layer.polygons {
+            for [a, b] in polygon
+                .vertices
+                .array_windows()
+                .copied()
+                .chain(std::iter::once([
+                    polygon.vertices[0],
+                    *polygon.vertices.last().unwrap(),
+                ]))
+            {
+                let a_vert = &layer.vertices[a as usize];
+                let b_vert = &layer.vertices[b as usize];
+
+                let segment = Segment2d::new(a_vert.coords, b_vert.coords);
+                let segment_relative = local_end - segment.point1();
+                let scalar_proj = segment_relative.dot(segment.direction().as_vec2());
+
+                let scalar_proj = scalar_proj.clamp(0.0, segment.length());
+
+                let point = segment.point1() + segment.direction().as_vec2() * scalar_proj;
+
+                let dist = point.distance_squared(local_end);
+                if dist < closest_dist {
+                    closest_point = point;
+                    closest_dist = dist;
+                }
             }
-        } else {
-            warn!(
-                "Pathfinding failed (from {} to {})",
-                navmesh
-                    .world_to_mesh()
-                    .transform_point3(trans.translation)
-                    .xy(),
-                closest_point
-            );
         }
+        (closest_point, false)
     }
 }
 
@@ -256,5 +301,21 @@ pub(crate) fn move_unit_along_path(
                 break;
             }
         }
+    }
+}
+
+fn on_movement_start(
+    trigger: Trigger<OnAdd, CurrentPath>,
+    mut q: Query<&mut StateList>,
+    states: Res<Protos<StateProto>>,
+) {
+    if let Ok(mut state_list) = q.get_mut(trigger.target()) {
+        state_list.add_state(State::moving(), &states);
+    }
+}
+
+fn on_movement_end(trigger: Trigger<OnRemove, CurrentPath>, mut q: Query<&mut StateList>) {
+    if let Ok(mut state_list) = q.get_mut(trigger.target()) {
+        state_list.remove_state(&State::moving());
     }
 }

@@ -33,6 +33,8 @@ pub fn plugin(app: &mut App) {
     app.register_trigger::<UpdateEffectCustomData>(ChannelDirection::ServerToClient);
     app.register_trigger::<RemoveEffect>(ChannelDirection::ServerToClient);
 
+    app.register_component::<CustomData>(ChannelDirection::ServerToClient);
+
     if app.is_client() {
         app.add_observer(on_effect_applied);
         app.add_observer(on_effect_custom_data_uppdated);
@@ -109,6 +111,7 @@ pub struct Effect {
     data: CustomData,
 }
 
+#[derive(PartialEq)]
 pub struct EffectProto {
     id: String,
     update_rate: f32,
@@ -128,15 +131,13 @@ proto!(
 );
 
 pub fn apply_effect(lua: &Lua, proxy: &UnitProxy, args: ApplyEffectArgs) -> LuaResult<()> {
-    info!("Apply effect called");
-
     let mut world = lua.world();
 
     let effect = Effect {
         proto: args.proto,
         id: EffectId::new(),
         time_till_update: 0.0,
-        data: CustomData::Nil,
+        data: args.data,
     };
 
     ApplyEffectCommand {
@@ -440,7 +441,7 @@ fn on_effect_removed(
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CustomData {
     #[default]
     Nil,
@@ -448,7 +449,7 @@ pub enum CustomData {
     Integer(i32),
     Number(f64),
     String(String),
-    Table(HashMap<String, CustomData>),
+    Table(HashMap<String, CustomData>, Vec<CustomData>),
 }
 
 impl IntoLua for CustomData {
@@ -459,10 +460,13 @@ impl IntoLua for CustomData {
             CustomData::Integer(val) => Ok(LuaValue::Integer(val)),
             CustomData::Number(val) => Ok(LuaValue::Number(val)),
             CustomData::String(val) => val.into_lua(lua),
-            CustomData::Table(hash_map) => {
+            CustomData::Table(hash_map, vec) => {
                 let table = lua.create_table()?;
                 for (key, val) in hash_map {
                     table.raw_set(key, val)?;
+                }
+                for val in vec {
+                    table.raw_push(val)?;
                 }
                 Ok(LuaValue::Table(table))
             }
@@ -480,11 +484,15 @@ impl FromLua for CustomData {
             LuaValue::String(val) => Ok(Self::String(val.to_string_lossy())),
             LuaValue::Table(table) => {
                 let mut map = HashMap::new();
+                let mut vec = vec![];
                 for pair in table.pairs::<String, CustomData>() {
                     let (key, val) = pair?;
                     map.insert(key, val);
                 }
-                Ok(Self::Table(map))
+                for val in table.sequence_values::<CustomData>() {
+                    vec.push(val?);
+                }
+                Ok(Self::Table(map, vec))
             }
             _ => Err(LuaError::external(anyhow::anyhow!(
                 "Invalid value {:?} in CustomData",

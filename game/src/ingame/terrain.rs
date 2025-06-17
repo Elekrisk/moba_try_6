@@ -259,7 +259,7 @@ struct DragVertex;
 struct SelectTerrain;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
-struct C(f32);
+pub struct C(pub f32);
 
 #[derive(Default, Resource)]
 struct SelectedTerrainObject(Option<Uuid>);

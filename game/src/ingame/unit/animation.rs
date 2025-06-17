@@ -9,54 +9,9 @@ pub fn plugin(app: &mut App) {
     if app.is_client() {
         app.add_observer(attach_animation_controller);
 
-        app.add_systems(Update, on_gltf_load);
+        app.add_systems(Update, (on_gltf_load, do_animation));
 
         app.init_resource::<GltfAnimations>();
-
-        app.add_systems(
-            Update,
-            |q: Query<(Entity, &Model, Has<CurrentPath>)>,
-             children: Query<&Children>,
-             mut player: Query<&mut AnimationPlayer>,
-             anims: Res<GltfAnimations>,
-             asset_server: Res<AssetServer>| {
-                for (e, model, path) in q {
-                    let Some(handle) = asset_server.get_handle(model.0.path()) else {
-                        continue;
-                    };
-                    for child in children.iter_descendants(e) {
-                        if let Ok(mut player) = player.get_mut(child) {
-                            let Some((_handle, anims)) = anims.map.get(&handle) else {
-                                continue;
-                            };
-                            let Some(moving) = anims.get("Moving") else {
-                                warn!("GLTF doesn't have Moving animation");
-                                continue;
-                            };
-                            let Some(idle) = anims.get("Idle") else {
-                                warn!("GLTF doesn't have Idle animation");
-                                continue;
-                            };
-
-                            if player
-                                .playing_animations()
-                                .filter(|(_, x)| !x.is_finished())
-                                .any(|(x, _)| x != moving && x != idle)
-                            {
-                                continue;
-                            }
-
-                            let &anim = if path { moving } else { idle };
-
-                            if !player.is_playing_animation(anim) {
-                                player.stop_all();
-                                player.play(anim).repeat();
-                            }
-                        }
-                    }
-                }
-            },
-        );
     }
 }
 
@@ -98,16 +53,50 @@ pub(crate) fn attach_animation_controller(
             if let Ok(mut anim) = anim.get_mut(e) {
                 commands
                     .entity(trigger.target())
-                    .insert(AnimationPlayerProxy(e));
+                    .insert((AnimationPlayerProxy(e), AnimationManager::new()));
                 // We add animation graph handle
                 commands
                     .entity(e)
                     .insert(AnimationGraphHandle(handle.clone()));
-                if let Some(idle) = anims.get("Idle") {
-                    anim.play(*idle).repeat();
-                } else {
-                    warn!("Model has no Idle animation");
-                }
+                // if let Some(idle) = anims.get("Idle") {
+                //     anim.play(*idle).repeat();
+                // } else {
+                //     warn!("Model has no Idle animation");
+                // }
+            }
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct AnimationManager {
+    pub next_animation: String,
+    pub loop_animation: bool,
+}
+
+impl AnimationManager {
+    pub fn new() -> Self {
+        Self {
+            next_animation: "Idle".into(),
+            loop_animation: true,
+        }
+    }
+}
+
+fn do_animation(q: Query<(&AnimationManager, &AnimationPlayerProxy, &Model), Changed<AnimationManager>>, mut player: Query<&mut AnimationPlayer>, anims: Res<GltfAnimations>, asset_server: Res<AssetServer>) {
+    for (man, proxy, model) in q {
+        let Some(gltf_handle) = asset_server.get_handle(model.0.path()) else {
+            error!("Asset {} wasn't registered in lua script", model.0.path().display());
+            continue;
+        };
+        let (_, anims) = anims.map.get(&gltf_handle).unwrap();
+        let &anim = anims.get(&man.next_animation).or_else(|| anims.get("Idle")).unwrap();
+        let mut player = player.get_mut(proxy.0).unwrap();
+        if !player.is_playing_animation(anim) {
+            player.stop_all();
+            let anim = player.play(anim);
+            if man.loop_animation {
+                anim.repeat();
             }
         }
     }

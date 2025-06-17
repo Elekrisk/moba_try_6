@@ -56,17 +56,17 @@ map.on_load = function()
     --     }
     -- end
 
-    local minion = game.spawn_unit {
-        proto = "minion",
-        team = 0,
-        position = {x = -2.5, y = 2.5}
-    }
+    -- local minion = game.spawn_unit {
+    --     proto = "minion",
+    --     team = 0,
+    --     position = {x = -2.5, y = 2.5}
+    -- }
 
-    local minion = game.spawn_unit {
-        proto = "minion",
-        team = 1,
-        position = {x = 2.5, y = -2.5}
-    }
+    -- local minion = game.spawn_unit {
+    --     proto = "minion",
+    --     team = 1,
+    --     position = {x = 2.5, y = -2.5}
+    -- }
 
     -- Spawning of turrets
     -- Spawning of terrain

@@ -4,12 +4,18 @@ use super::{
     structure::Model,
 };
 use crate::{
+    AppExt, GameState,
     ingame::{
-        lua::W,
+        lua::{LuaCtx, W},
         targetable::Health,
-        unit::{attack::AutoAttackTimer, effect::EffectList, stats::{BaseStats, StatBlock}},
+        unit::{
+            attack::{AutoAttackTarget, AutoAttackTimer, AutoAttackType},
+            effect::{CustomData, EffectList},
+            state::{State, StateList},
+            stats::{BaseStats, StatBlock},
+        },
         vision::{SightRange, VisibleBy},
-    }, AppExt, GameState
+    },
 };
 use anyhow::anyhow;
 use bevy::{
@@ -23,12 +29,13 @@ use lobby_common::Team;
 use mlua::prelude::*;
 
 pub mod animation;
+pub mod attack;
 pub mod champion;
+pub mod collision;
 pub mod effect;
 pub mod movement;
-pub mod stats;
-pub mod attack;
 pub mod state;
+pub mod stats;
 
 pub fn common(app: &mut App) {
     app.add_plugins((
@@ -39,6 +46,7 @@ pub fn common(app: &mut App) {
         champion::plugin,
         attack::plugin,
         state::plugin,
+        collision::plugin,
     ));
 
     app.register_trigger::<SetUnitMovementTarget>(ChannelDirection::ClientToServer);
@@ -75,9 +83,7 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
                 return ().into_lua_multi(lua);
             }
 
-            let mut world = lua.world();
-
-            let id = SpawnUnit(args).apply(&mut world);
+            let id = SpawnUnit(args).apply_from_lua(lua);
 
             UnitProxy { entity: id }.into_lua_multi(lua)
         })?,
@@ -88,26 +94,60 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
 
 pub struct SpawnUnit(pub SpawnUnitArgs);
 
-impl Command<Entity> for SpawnUnit {
-    fn apply(self, world: &mut World) -> Entity {
+impl SpawnUnit {
+    fn spawn(self, world: &mut World) -> (UnitProto, Entity) {
         let args = self.0;
-        
-        let (proto, origin) = world.resource_mut::<Protos<UnitProto>>().get(&args.proto).unwrap();
-        
+
+        let (proto, origin) = world
+            .resource_mut::<Protos<UnitProto>>()
+            .get(&args.proto)
+            .unwrap();
+
         let id = world
             .spawn((
                 Transform::from_xyz(args.position.x, 0.0, args.position.y),
-                Model(proto.model.relative(&origin)),
+                Model(proto.model.clone().relative(&origin)),
                 Unit,
                 args.team,
+                args.data,
+                proto.attack_type,
                 MapEntity,
                 Health(proto.base_stats.max_health),
-                StatBlock::from(proto.base_stats),
+                StatBlock::from(proto.base_stats.clone()),
                 UnitId(Uuid::new_v4()),
                 StateScoped(GameState::InGame),
                 ServerReplicate::default(),
             ))
             .id();
+
+        (proto, id)
+    }
+
+    fn apply_from_lua(self, lua: &Lua) -> Entity {
+        let mut world = lua.world();
+
+        let (proto, id) = self.spawn(&mut world);
+
+        if let Some(on_spawn) = proto.on_spawn {
+            drop(world);
+            on_spawn.call::<()>(UnitProxy { entity: id }).unwrap();
+        }
+
+        id
+    }
+}
+
+impl Command<Entity> for SpawnUnit {
+    fn apply(self, world: &mut World) -> Entity {
+        let (proto, id) = self.spawn(world);
+
+        if let Some(on_spawn) = proto.on_spawn {
+            let lua = world.resource::<LuaCtx>().0.clone();
+
+            lua.with_world(world, |_lua| {
+                on_spawn.call::<()>(UnitProxy { entity: id }).unwrap();
+            });
+        }
 
         id
     }
@@ -120,6 +160,7 @@ pub struct SpawnUnitArgs {
     pub proto: String,
     pub position: Vec2,
     pub team: Team,
+    pub data: CustomData,
 }
 
 from_into_lua_table!(
@@ -127,6 +168,7 @@ from_into_lua_table!(
         proto: String,
         position: {W} Vec2,
         team: {W} Team,
+        data: CustomData,
     }
 );
 
@@ -149,24 +191,30 @@ impl IntoLua for W<Team> {
     }
 }
 
+#[derive(PartialEq)]
 struct UnitProto {
     id: String,
     name: String,
+    attack_type: AutoAttackType,
     base_stats: BaseStats,
     model: AssetPath<'static>,
+    on_spawn: Option<LuaFunction>,
 }
 
 proto!(
-struct UnitProto {
-    id: String,
-    name: String,
-    base_stats: BaseStats,
-    model: {W} AssetPath<'static>
-});
+    struct UnitProto {
+        id: String,
+        name: String,
+        attack_type: AutoAttackType,
+        base_stats: BaseStats,
+        model: {W} AssetPath<'static>,
+        on_spawn: Option<LuaFunction>,
+    }
+);
 
 /// Marker struct for units
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-#[require(VisibleBy, SightRange = SightRange(10.0), EffectList, AutoAttackTimer)]
+#[require(VisibleBy, SightRange = SightRange(10.0), EffectList, AutoAttackTimer, StateList, CustomData)]
 pub struct Unit;
 
 /// Where this unit currently wants to go
@@ -215,6 +263,7 @@ fn on_unit_id_removed(
 
 // --- Proxy ---
 
+#[derive(Clone, FromLua)]
 pub struct UnitProxy {
     pub entity: Entity,
 }
@@ -249,10 +298,38 @@ impl LuaUserData for UnitProxy {
             Ok(())
         });
 
+        methods.add_method("set_attack_target", |lua, s, target: UnitProxy| {
+            lua.world()
+                .entity_mut(s.entity)
+                .insert(AutoAttackTarget(target.entity));
+            Ok(())
+        });
+
         methods.add_method("get_team", |lua, s, ()| {
             Ok(W(*lua.world().entity(s.entity).get::<Team>().unwrap()))
         });
 
+        methods.add_method("get_visible_units", |lua, s, ()| {
+            let mut world = lua.world();
+            let unit_team = *world.entity(s.entity).get::<Team>().unwrap();
+            let mut q = world.query_filtered::<(Entity, &Team, &VisibleBy), With<Unit>>();
+            let units = q
+                .iter(&world)
+                .filter(|x| x.2.0.contains(&unit_team))
+                .map(|x| UnitProxy { entity: x.0 });
+
+            Ok(Vec::from_iter(units))
+        });
+
         methods.add_method("apply_effect", effect::apply_effect);
+
+        methods.add_method("get_custom_data", |lua, s, ()| {
+            Ok(lua.world().entity(s.entity).get::<CustomData>().unwrap().clone())
+        });
+
+        methods.add_method("set_custom_data", |lua, s, data: CustomData| {
+            *lua.world().entity_mut(s.entity).get_mut::<CustomData>().unwrap() = data;
+            Ok(())
+        });
     }
 }

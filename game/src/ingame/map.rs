@@ -23,7 +23,7 @@ use crate::{
         structure::Model,
         targetable::Health,
         unit::{ControlledByClient, SpawnUnit, SpawnUnitArgs, Unit},
-        vision::FogOfWarTexture,
+        
     }, AppExt, Players, ServerOptions
 };
 
@@ -79,6 +79,7 @@ impl Channel for MessageChannel {
     }
 }
 
+#[derive(PartialEq)]
 pub struct MapProto {
     pub id: String,
     pub name: String,
@@ -153,23 +154,23 @@ impl Command for LoadMap {
             info!("Load player units");
             world.commands().queue(SpawnPlayerUnits {})
         } else {
-            info!("Spawn fog of war");
-            let fog_image = FogOfWarTexture::new(vec2(50.0, 50.0), world.resource::<AssetServer>());
-            world.spawn((
-                {
-                    let mut trans =
-                        Transform::from_scale(vec3(100.0, 100.0, 2.0)).with_translation(Vec3::Y);
-                    trans.rotate_local_x(90.0f32.to_radians());
-                    trans
-                },
-                FogVolume {
-                    density_factor: 1.0,
-                    scattering: 1.0,
-                    density_texture: Some(fog_image.0.clone()),
-                    ..default()
-                },
-            ));
-            world.insert_resource(fog_image);
+            // info!("Spawn fog of war");
+            // let fog_image = FogOfWarTexture::new(vec2(50.0, 50.0), world.resource::<AssetServer>());
+            // world.spawn((
+            //     {
+            //         let mut trans =
+            //             Transform::from_scale(vec3(100.0, 100.0, 2.0)).with_translation(Vec3::Y);
+            //         trans.rotate_local_x(90.0f32.to_radians());
+            //         trans
+            //     },
+            //     FogVolume {
+            //         density_factor: 1.0,
+            //         scattering: 1.0,
+            //         density_texture: Some(fog_image.0.clone()),
+            //         ..default()
+            //     },
+            // ));
+            // world.insert_resource(fog_image);
         }
     }
 }
@@ -181,29 +182,11 @@ impl Command for SpawnPlayerUnits {
         // We need to get each player
         world.resource_scope(|world, players: Mut<Players>| {
             for player in players.players.values() {
-                // TODO: We always just spawn some random unit right now
-                // This should use a champdefs spawn function in the future
-                // world.spawn((
-                //     Transform::from_xyz(0.0, 0.0, 0.0),
-                //     Model(AssetPath::parse("champs/example_champion/model.glb#Scene0")),
-                //     Unit,
-                //     player.team,
-                //     ControlledByClient(player.client_id),
-                //     MapEntity,
-                //     Health(100.0),
-                //     ServerReplicate {
-                //         sync: SyncTarget {
-                //             // interpolation: lightyear::prelude::NetworkTarget::All,
-                //             ..default()
-                //         },
-                //         ..default()
-                //     },
-                // ));
-
                 let id = SpawnUnit(SpawnUnitArgs {
                     proto: player.champion.0.clone(),
-                    position: vec2(0.0, 0.0),
+                    position: vec2(-19.6, 43.9),
                     team: player.team,
+                    data: super::unit::effect::CustomData::Nil,
                 }).apply(world);
                 world.entity_mut(id).insert(ControlledByClient(player.client_id));
             }

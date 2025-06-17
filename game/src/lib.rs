@@ -10,6 +10,7 @@
 #![feature(never_type)]
 #![feature(random)]
 #![feature(try_blocks)]
+#![feature(iter_collect_into)]
 
 use std::{fmt::Display, path::PathBuf};
 
@@ -30,6 +31,7 @@ mod ui;
 pub use ingame::{
     InGamePlayerInfo, Players,
     network::{PROTOCOL_ID, PrivateKey, ServerOptions},
+    camera::PrimaryCamera,
     unit::Unit,
 };
 pub use network::Sess;
@@ -115,6 +117,7 @@ fn client_setup(mut commands: Commands) {
         // Transform::from_xyz(0.0, 55.0, 0.0).looking_at(Vec3::ZERO, Vec3::new(-1.0, 0.0, -1.0).normalize()),
         VolumetricFog::default(),
         UiCameraMarker,
+        PrimaryCamera
     ));
     commands.spawn((
         DirectionalLight {

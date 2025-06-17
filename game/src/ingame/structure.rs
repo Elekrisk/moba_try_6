@@ -36,6 +36,7 @@ pub fn common(app: &mut App) {
     app.register_component::<Structure>(ChannelDirection::ServerToClient);
 }
 
+#[derive(PartialEq)]
 pub struct StructProto {
     pub id: String,
     pub name: String,

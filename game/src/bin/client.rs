@@ -1,14 +1,7 @@
 use std::{any::TypeId, fs::File, path::PathBuf, sync::OnceLock};
 
 use bevy::{
-    asset::{ReflectAsset, UntypedAssetId},
-    ecs::system::SystemIdMarker,
-    input_focus::InputDispatchPlugin,
-    log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
-    prelude::*,
-    reflect::TypeRegistry,
-    render::camera::Viewport,
-    window::PrimaryWindow,
+    asset::{ReflectAsset, UntypedAssetId}, dev_tools::fps_overlay::FpsOverlayConfig, ecs::system::SystemIdMarker, input_focus::InputDispatchPlugin, log::{tracing_subscriber::Layer, BoxedLayer, LogPlugin}, prelude::*, reflect::TypeRegistry, render::camera::Viewport, window::PrimaryWindow
 };
 use bevy_enhanced_input::{
     EnhancedInputPlugin,
@@ -26,7 +19,7 @@ use bevy_inspector_egui::{
 };
 use clap::Parser;
 use egui_dock::{DockArea, DockState, NodeIndex, Style, egui};
-use game::{LobbySender, Options, ServerFixedUpdateDuration, Unit};
+use game::{LobbySender, Options, PrimaryCamera, ServerFixedUpdateDuration, Unit};
 use lobby_common::ClientToLobby;
 
 use tracing_appender::non_blocking::WorkerGuard;
@@ -74,7 +67,7 @@ fn main() -> AppExit {
                     ..default()
                 }),
             InputDispatchPlugin,
-            // bevy::dev_tools::fps_overlay::FpsOverlayPlugin::default(),
+            bevy::dev_tools::fps_overlay::FpsOverlayPlugin { config: FpsOverlayConfig { enabled: false, ..default() }},
             EguiPlugin {
                 enable_multipass_for_primary_context: true,
             },
@@ -127,9 +120,14 @@ fn toggle_stat_display(
     server_update_text: Option<Single<&mut Text, (With<ServerUpdateText>, Without<UnitText>)>>,
     units: Query<(), With<Unit>>,
     server_update: Res<ServerFixedUpdateDuration>,
+    fps: Option<ResMut<FpsOverlayConfig>>,
     mut commands: Commands,
 ) {
     if input.just_pressed(KeyCode::F1) {
+        if let Some(mut fps) = fps {
+            fps.enabled = !fps.enabled;
+        }
+
         if let Some(text_entity) = text {
             commands.entity(*text_entity).despawn();
         } else {
@@ -448,7 +446,7 @@ fn set_camera_viewport(
     primary_window: Query<&mut Window, With<PrimaryWindow>>,
     egui_settings: Single<&EguiContextSettings>,
     run_inspector: Res<RunInspector>,
-    mut cam: Single<&mut Camera>,
+    mut cam: Single<&mut Camera, With<PrimaryCamera>>,
 ) {
     let Ok(window) = primary_window.single() else {
         return;

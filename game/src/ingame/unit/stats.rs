@@ -48,6 +48,7 @@ impl Stat {
     }
 }
 
+#[derive(Clone, PartialEq)]
 pub struct BaseStats {
     pub max_health: f32,
     pub move_speed: f32,

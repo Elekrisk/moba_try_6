@@ -118,8 +118,8 @@ macro_rules! from_into_lua_table {
 }
 
 macro_rules! proto {
-    (struct $name:ident {
-        $($item:ident: $({$tt:tt})? $item_ty:ty),* $(,)?
+    ($v:vis struct $name:ident {
+        $($iv:vis $item:ident: $({$tt:tt})? $item_ty:ty),* $(,)?
     }) => {
         from_into_lua_table!(struct $name { $($item: $({$tt})? $item_ty),* });
 
@@ -127,10 +127,16 @@ macro_rules! proto {
             fn id(&self) -> &str {
                 &self.id
             }
+
+            fn props(&self) -> &[&str] {
+                &[
+                    $(stringify!($item)),*
+                ]
+            }
         }
     };
-    (struct W<$name:ident> {
-        $($item:ident: $({$tt:tt})? $item_ty:ty),* $(,)?
+    ($v:vis struct W<$name:ident> {
+        $($iv:vis $item:ident: $({$tt:tt})? $item_ty:ty),* $(,)?
     }) => {
         from_into_lua_table!(struct W<$name> { $($item: $({$tt})? $item_ty),* });
 
@@ -435,7 +441,7 @@ impl AssetLoader for LuaScriptLoader {
 
 #[derive(Resource)]
 pub struct Protos<T> {
-    map: HashMap<String, (LuaValue, PathBuf)>,
+    map: HashMap<String, (LuaValue, T, PathBuf)>,
     lua: Lua,
     _phantom: PhantomData<T>,
 }
@@ -453,20 +459,40 @@ impl<T> FromWorld for Protos<T> {
 impl<T: Proto> Protos<T> {
     pub fn insert(&mut self, value: LuaValue, origin: PathBuf) -> LuaResult<LuaValue> {
         let proto = T::from_lua(value.clone(), &self.lua)?;
-        self.map.insert(proto.id().into(), (value.clone(), origin));
+        if let Some(table) = value.as_table() {
+            for pair in table.pairs::<String, LuaValue>() {
+                let Ok((key, _)) = pair else {
+                    warn!("Non-string key in proto '{}'", proto.id());
+                    continue
+                };
+                if !proto.props().contains(&key.as_str()) {
+                    warn!("Key '{}' is superfluous in proto '{}'", key, proto.id())
+                }
+            }
+        }
+        self.map.insert(proto.id().into(), (value.clone(), proto, origin));
         Ok(value)
     }
 
     pub fn get(&self, id: &str) -> LuaResult<(T, PathBuf)> {
-        let (value, origin) = self
+        let (value, _, origin) = self
             .map
             .get(id)
             .ok_or_else(|| LuaError::external(anyhow!("Missing proto")))?;
         let proto = T::from_lua(value.clone(), &self.lua)?;
         Ok((proto, origin.clone()))
     }
+
+    pub fn get_cached(&self, id: &str) -> LuaResult<(&T, PathBuf)> {
+        let (_, cached, origin) = self
+            .map
+            .get(id)
+            .ok_or_else(|| LuaError::external(anyhow!("Missing proto")))?;
+        Ok((cached, origin.clone()))
+    }
 }
 
-pub trait Proto: FromLua {
+pub trait Proto: FromLua + PartialEq {
     fn id(&self) -> &str;
+    fn props(&self) -> &[&str];
 }

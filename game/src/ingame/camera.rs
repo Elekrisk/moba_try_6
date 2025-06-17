@@ -3,6 +3,9 @@ use bevy_enhanced_input::prelude::{ActionState, *};
 
 use crate::client_setup;
 
+#[derive(Component)]
+pub struct PrimaryCamera;
+
 pub fn client(app: &mut App) {
     app.init_resource::<MousePos>()
         .add_input_context::<CameraInput>()
@@ -19,7 +22,7 @@ pub fn client(app: &mut App) {
         );
 }
 
-fn setup_camera(camera: Single<Entity, With<Camera>>, mut commands: Commands) {
+fn setup_camera(camera: Single<Entity, With<PrimaryCamera>>, mut commands: Commands) {
     commands
         .spawn((CameraFocus, Transform::from_xyz(0.0, 0.0, 0.0)))
         .add_child(*camera);
@@ -85,7 +88,7 @@ pub struct MousePos {
 
 fn update_mouse_pos(
     window: Single<&Window, With<PrimaryWindow>>,
-    camera: Single<(&Camera, &GlobalTransform)>,
+    camera: Single<(&Camera, &GlobalTransform), With<PrimaryCamera>>,
     mut mouse_pos: ResMut<MousePos>,
 ) {
     let Some(pos) = window.cursor_position() else {
@@ -138,7 +141,7 @@ fn drag_camera(
 
 fn zoom_camera(
     trigger: Trigger<Fired<CameraZoom>>,
-    mut camera: Single<&mut Transform, With<Camera>>,
+    mut camera: Single<&mut Transform, With<PrimaryCamera>>,
 ) {
     let x = trigger.event().value;
     let change = 1.0 - x.y * 0.2;
@@ -211,7 +214,7 @@ impl AnchorPoint {
 
 /// relationship that defines which uinodes are anchored to this entity
 #[derive(Component, Reflect, Clone, Debug, PartialEq)]
-#[relationship_target(relationship = AnchorUiNode)]
+#[relationship_target(relationship = AnchorUiNode, linked_spawn)]
 pub struct AnchoredUiNodes(Vec<Entity>);
 
 /// Component that will continuosly update the UI location on screen, to match an in world location either chosen as a fixed
