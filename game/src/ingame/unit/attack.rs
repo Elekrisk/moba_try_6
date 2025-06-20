@@ -1,6 +1,6 @@
 use bevy::{ecs::entity::MapEntities, prelude::*};
 use lightyear::prelude::{
-    AppComponentExt, AppIdentityExt, AppTriggerExt, ChannelDirection, FromClients,
+    AppComponentExt, AppTriggerExt, 
 };
 use lobby_common::Team;
 use mlua::{FromLua, IntoLua};
@@ -19,16 +19,16 @@ use crate::{
 };
 
 pub fn plugin(app: &mut App) {
-    app.register_component::<AutoAttackTarget>(ChannelDirection::ServerToClient)
+    app.register_component::<AutoAttackTarget>()
         .add_map_entities();
-    app.register_component::<AutoAttackTimer>(ChannelDirection::ServerToClient);
-    app.register_component::<AutoAttackType>(ChannelDirection::ServerToClient);
-    app.register_component::<CurrentlyAutoAttacking>(ChannelDirection::ServerToClient)
+    app.register_component::<AutoAttackTimer>();
+    app.register_component::<AutoAttackType>();
+    app.register_component::<CurrentlyAutoAttacking>()
         .add_map_entities();
-    app.register_trigger::<SetAutoAttackTarget>(ChannelDirection::ClientToServer);
+    // app.register_trigger::<SetAutoAttackTarget>(ChannelDirection::ClientToServer);
 
     if app.is_server() {
-        app.add_observer(on_set_auto_attack_target);
+        // app.add_observer(on_set_auto_attack_target);
         app.add_observer(on_start_aa);
         app.add_observer(on_stop_aa);
         // app.add_observer(on_aa_stopped);
@@ -290,49 +290,49 @@ impl IntoLua for AutoAttackType {
 #[derive(Event, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SetAutoAttackTarget(pub UnitId);
 
-fn on_set_auto_attack_target(
-    trigger: Trigger<FromClients<SetAutoAttackTarget>>,
-    q: Query<(
-        Entity,
-        &ControlledByClient,
-        &mut StateList,
-        Option<&CurrentlyAutoAttacking>,
-    )>,
-    unit_map: Res<UnitMap>,
-    state_protos: Res<Protos<StateProto>>,
-    mut commands: Commands,
-) {
-    info!("Received set auto attack");
-    for (e, control, mut state_list, cur_target) in q {
-        if control.0 == trigger.from {
-            info!("Setting auto attack target");
-            let new_target = *unit_map.map.get(&trigger.message.0).unwrap();
-            if let Some(cur_target) = cur_target
-                && cur_target.target != new_target
-            {
-                commands.entity(e).remove::<CurrentlyAutoAttacking>();
-                // Queue on_move_cancel
+// fn on_set_auto_attack_target(
+//     trigger: Trigger<FromClients<SetAutoAttackTarget>>,
+//     q: Query<(
+//         Entity,
+//         &ControlledByClient,
+//         &mut StateList,
+//         Option<&CurrentlyAutoAttacking>,
+//     )>,
+//     unit_map: Res<UnitMap>,
+//     state_protos: Res<Protos<StateProto>>,
+//     mut commands: Commands,
+// ) {
+//     info!("Received set auto attack");
+//     for (e, control, mut state_list, cur_target) in q {
+//         if control.0 == trigger.from {
+//             info!("Setting auto attack target");
+//             let new_target = *unit_map.map.get(&trigger.message.0).unwrap();
+//             if let Some(cur_target) = cur_target
+//                 && cur_target.target != new_target
+//             {
+//                 commands.entity(e).remove::<CurrentlyAutoAttacking>();
+//                 // Queue on_move_cancel
 
-                let (proto, _) = state_protos.get(&state_list.current_state().proto).unwrap();
-                // if proto.move_cancellable {
-                commands.entity(e).remove::<CurrentlyAutoAttacking>();
+//                 let (proto, _) = state_protos.get(&state_list.current_state().proto).unwrap();
+//                 // if proto.move_cancellable {
+//                 commands.entity(e).remove::<CurrentlyAutoAttacking>();
 
-                if let Some(on_cancel) = proto.on_move_cancel.clone() {
-                    commands.queue(move |world: &mut World| {
-                        let lua = world.resource::<LuaCtx>().0.clone();
-                        lua.with_world(world, |_| {
-                            on_cancel.call::<()>(UnitProxy { entity: e }).unwrap();
-                        });
-                    });
-                }
-                // }
-            }
-            commands.entity(e).insert(AutoAttackTarget(
-                *unit_map.map.get(&trigger.message.0).unwrap(),
-            ));
-        }
-    }
-}
+//                 if let Some(on_cancel) = proto.on_move_cancel.clone() {
+//                     commands.queue(move |world: &mut World| {
+//                         let lua = world.resource::<LuaCtx>().0.clone();
+//                         lua.with_world(world, |_| {
+//                             on_cancel.call::<()>(UnitProxy { entity: e }).unwrap();
+//                         });
+//                     });
+//                 }
+//                 // }
+//             }
+//             commands.entity(e).insert(AutoAttackTarget(
+//                 *unit_map.map.get(&trigger.message.0).unwrap(),
+//             ));
+//         }
+//     }
+// }
 
 fn on_start_aa(
     trigger: Trigger<OnInsert, CurrentlyAutoAttacking>,

@@ -1,9 +1,10 @@
 use std::{net::IpAddr, sync::Arc, time::Duration};
 
 use bevy::{
-    app::{ScheduleRunnerPlugin, TerminalCtrlCHandlerPlugin},
+    app::{MainScheduleOrder, ScheduleRunnerPlugin, TerminalCtrlCHandlerPlugin},
     asset::uuid::Uuid,
     diagnostic::DiagnosticsPlugin,
+    ecs::schedule::ScheduleLabel,
     log::LogPlugin,
     platform::collections::HashMap,
     prelude::*,
@@ -15,7 +16,10 @@ use game::{
     InGamePlayerInfo, PROTOCOL_ID, Players, PrivateKey, ServerFixedUpdateDuration, ServerOptions,
     Sess,
 };
-use lightyear::prelude::{ClientId, ConnectToken, generate_key};
+use lightyear::{
+    netcode::{ConnectToken, generate_key},
+    prelude::{NetworkTarget, PeerId, Replicate},
+};
 use lobby_common::{LobbyToServer, PlayerId, ServerToLobby, Team};
 use wtransport::{Endpoint, Identity, ServerConfig};
 
@@ -23,7 +27,11 @@ use wtransport::{Endpoint, Identity, ServerConfig};
 fn main() -> AppExit {
     let options = ServerOptions::parse();
 
-    let private_key = if options.direct_connect { [0; 32] } else { generate_key() };
+    let private_key = if options.direct_connect {
+        [0; 32]
+    } else {
+        generate_key()
+    };
 
     let players = if !options.direct_connect {
         tokio::runtime::Runtime::new()
@@ -89,7 +97,7 @@ fn main() -> AppExit {
                         InGamePlayerInfo {
                             id: player.id,
                             name: player.name,
-                            client_id: ClientId::Netcode(client_id),
+                            client_id: PeerId::Netcode(client_id),
                             team: player.team,
                             champion: player.champ,
                             controlled_unit: None,
@@ -113,14 +121,17 @@ fn main() -> AppExit {
             })
     } else {
         Some(Players {
-            players: HashMap::from_iter([(PlayerId(Uuid::nil()), InGamePlayerInfo {
-                id: PlayerId(Uuid::nil()),
-                client_id: ClientId::Netcode(0),
-                name: "Guest".into(),
-                team: Team(0),
-                champion: ChampionId("example_champion".into()),
-                controlled_unit: None,
-            })]),
+            players: HashMap::from_iter([(
+                PlayerId(Uuid::nil()),
+                InGamePlayerInfo {
+                    id: PlayerId(Uuid::nil()),
+                    client_id: PeerId::Netcode(0),
+                    name: "Guest".into(),
+                    team: Team(0),
+                    champion: ChampionId("example_champion".into()),
+                    controlled_unit: None,
+                },
+            )]),
         })
     };
 
@@ -128,9 +139,11 @@ fn main() -> AppExit {
         return AppExit::error();
     };
 
-    App::new()
-        .insert_resource(options)
-        .insert_resource(players)
+    #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    struct PrePreStartup;
+
+    let mut app = App::new();
+    app.insert_resource(options)
         .insert_resource(PrivateKey(private_key))
         .add_plugins((
             MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(
@@ -142,27 +155,35 @@ fn main() -> AppExit {
                 // level: bevy::log::Level::DEBUG,
                 ..default()
             },
-            TransformPlugin::default(),
-            DiagnosticsPlugin::default(),
-            TerminalCtrlCHandlerPlugin::default(),
+            TransformPlugin,
+            DiagnosticsPlugin,
+            TerminalCtrlCHandlerPlugin,
             AssetPlugin::default(),
-            StatesPlugin::default(),
+            StatesPlugin,
             game::server,
-        ))
-        .insert_resource(Timing(std::time::Instant::now()))
-        .add_systems(FixedFirst, |mut timing: ResMut<Timing>| {
-            timing.0 = std::time::Instant::now();
-        })
-        .add_systems(
-            FixedLast,
-            |timing: Res<Timing>, mut fixed_update: ResMut<ServerFixedUpdateDuration>| {
-                let time = std::time::Instant::now()
-                    .duration_since(timing.0)
-                    .as_secs_f32();
-                fixed_update.0 = time;
-            },
-        )
-        .run()
+        ));
+
+    let mut order = app.world_mut().resource_mut::<MainScheduleOrder>();
+    order.insert_startup_before(StateTransition, PrePreStartup);
+
+    app.add_systems(PrePreStartup, move |mut commands: Commands| {
+        info!("Spawning players");
+        commands.spawn((players.clone(), Replicate::to_clients(NetworkTarget::All)));
+    })
+    .insert_resource(Timing(std::time::Instant::now()))
+    .add_systems(FixedFirst, |mut timing: ResMut<Timing>| {
+        timing.0 = std::time::Instant::now();
+    })
+    // .add_systems(
+    //     FixedLast,
+    //     |timing: Res<Timing>, mut fixed_update: ResMut<ServerFixedUpdateDuration>| {
+    //         let time = std::time::Instant::now()
+    //             .duration_since(timing.0)
+    //             .as_secs_f32();
+    //         fixed_update.0 = time;
+    //     },
+    // )
+    .run()
 }
 
 #[derive(Resource)]

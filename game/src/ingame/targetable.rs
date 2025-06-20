@@ -8,6 +8,7 @@ use crate::ingame::{
 use bevy::{color::palettes, prelude::*};
 use lightyear::prelude::*;
 use lobby_common::Team;
+use serde::{Deserialize, Serialize};
 
 use crate::{AppExt, GameState, UiCameraMarker, ingame::unit::MyTeam};
 
@@ -21,9 +22,9 @@ pub struct Health(pub f32);
 pub fn common(app: &mut App) {
     app.add_plugins(healthbar::plugin);
 
-    app.register_component::<Health>(ChannelDirection::ServerToClient);
-    app.register_component::<Position>(ChannelDirection::ServerToClient);
-    app.register_component::<Facing>(ChannelDirection::ServerToClient);
+    app.register_component::<Health>();
+    app.register_component::<Position>();
+    app.register_component::<Facing>();
 
     if app.is_client() {
         app.add_plugins(AnchorUiPlugin::<UiCameraMarker>::new());

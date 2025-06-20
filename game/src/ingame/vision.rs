@@ -27,8 +27,8 @@ use crate::{
 use super::targetable::Position;
 
 pub fn plugin(app: &mut App) {
-    app.register_component::<VisibleBy>(ChannelDirection::ServerToClient);
-    app.register_component::<SightRange>(ChannelDirection::ServerToClient);
+    app.register_component::<VisibleBy>();
+    app.register_component::<SightRange>();
 
     if app.is_server() {
         app.add_systems(

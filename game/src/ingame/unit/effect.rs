@@ -8,7 +8,7 @@ use bevy::{
 };
 use derive_more::From;
 use egui_dock::egui::UserData;
-use lightyear::{channel::builder::EntityActionsChannel, prelude::*};
+use lightyear::{ prelude::*};
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -29,16 +29,16 @@ pub fn plugin(app: &mut App) {
         update_effects.run_if(in_state(GameState::InGame)),
     );
 
-    app.register_trigger::<ApplyEffect>(ChannelDirection::ServerToClient);
-    app.register_trigger::<UpdateEffectCustomData>(ChannelDirection::ServerToClient);
-    app.register_trigger::<RemoveEffect>(ChannelDirection::ServerToClient);
+    // app.register_trigger::<ApplyEffect>(ChannelDirection::ServerToClient);
+    // app.register_trigger::<UpdateEffectCustomData>(ChannelDirection::ServerToClient);
+    // app.register_trigger::<RemoveEffect>(ChannelDirection::ServerToClient);
 
-    app.register_component::<CustomData>(ChannelDirection::ServerToClient);
+    app.register_component::<CustomData>();
 
     if app.is_client() {
-        app.add_observer(on_effect_applied);
-        app.add_observer(on_effect_custom_data_uppdated);
-        app.add_observer(on_effect_removed);
+        // app.add_observer(on_effect_applied);
+        // app.add_observer(on_effect_custom_data_uppdated);
+        // app.add_observer(on_effect_removed);
 
         app.init_resource::<DeferredUnitCommands>();
 
@@ -260,13 +260,13 @@ impl Command for ApplyEffectCommand {
             .get_mut()
             .add_effect(&proto, self.effect.clone());
         let unit_id = *entity.get::<UnitId>().unwrap();
-        world.server_trigger::<MessageChannel>(
-            ApplyEffect {
-                unit_id,
-                effect: self.effect,
-            },
-            NetworkTarget::All,
-        );
+        // world.server_trigger::<MessageChannel>(
+        //     ApplyEffect {
+        //         unit_id,
+        //         effect: self.effect,
+        //     },
+        //     NetworkTarget::All,
+        // );
     }
 }
 
@@ -390,56 +390,56 @@ fn apply_deferred_unit_command(
     }
 }
 
-fn on_effect_applied(
-    trigger: Trigger<FromServer<ApplyEffect>>,
-    protos: Res<Protos<EffectProto>>,
-    mut q: Query<&mut EffectList>,
-    unit_map: Res<UnitMap>,
-    mut queue: ResMut<DeferredUnitCommands>,
-) {
-    if let Some(&e) = unit_map.map.get(&trigger.message.unit_id) {
-        let effect = trigger.message.effect.clone();
-        q.get_mut(e)
-            .unwrap()
-            .add_effect(&protos.get(&effect.proto).unwrap().0, effect);
-    } else {
-        queue.queue.push(trigger.message.clone().into());
-    }
-}
+// fn on_effect_applied(
+//     trigger: Trigger<FromServer<ApplyEffect>>,
+//     protos: Res<Protos<EffectProto>>,
+//     mut q: Query<&mut EffectList>,
+//     unit_map: Res<UnitMap>,
+//     mut queue: ResMut<DeferredUnitCommands>,
+// ) {
+//     if let Some(&e) = unit_map.map.get(&trigger.message.unit_id) {
+//         let effect = trigger.message.effect.clone();
+//         q.get_mut(e)
+//             .unwrap()
+//             .add_effect(&protos.get(&effect.proto).unwrap().0, effect);
+//     } else {
+//         queue.queue.push(trigger.message.clone().into());
+//     }
+// }
 
-fn on_effect_custom_data_uppdated(
-    trigger: Trigger<FromServer<UpdateEffectCustomData>>,
-    mut q: Query<&mut EffectList>,
-    unit_map: Res<UnitMap>,
-    mut queue: ResMut<DeferredUnitCommands>,
-) {
-    if let Some(&e) = unit_map.map.get(&trigger.message.unit_id) {
-        q.get_mut(e)
-            .unwrap()
-            .effect_list
-            .get_mut(&trigger.message.effect_id)
-            .unwrap()
-            .data = trigger.message.custom_data.clone();
-    } else {
-        queue.queue.push(trigger.message.clone().into());
-    }
-}
+// fn on_effect_custom_data_uppdated(
+//     trigger: Trigger<FromServer<UpdateEffectCustomData>>,
+//     mut q: Query<&mut EffectList>,
+//     unit_map: Res<UnitMap>,
+//     mut queue: ResMut<DeferredUnitCommands>,
+// ) {
+//     if let Some(&e) = unit_map.map.get(&trigger.message.unit_id) {
+//         q.get_mut(e)
+//             .unwrap()
+//             .effect_list
+//             .get_mut(&trigger.message.effect_id)
+//             .unwrap()
+//             .data = trigger.message.custom_data.clone();
+//     } else {
+//         queue.queue.push(trigger.message.clone().into());
+//     }
+// }
 
-fn on_effect_removed(
-    trigger: Trigger<FromServer<RemoveEffect>>,
-    mut q: Query<&mut EffectList>,
+// fn on_effect_removed(
+//     trigger: Trigger<FromServer<RemoveEffect>>,
+//     mut q: Query<&mut EffectList>,
 
-    unit_map: Res<UnitMap>,
-    mut queue: ResMut<DeferredUnitCommands>,
-) {
-    if let Some(&e) = unit_map.map.get(&trigger.message.unit_id) {
-        q.get_mut(e)
-            .unwrap()
-            .remove_effect(trigger.message.effect_id);
-    } else {
-        queue.queue.push(trigger.message.clone().into());
-    }
-}
+//     unit_map: Res<UnitMap>,
+//     mut queue: ResMut<DeferredUnitCommands>,
+// ) {
+//     if let Some(&e) = unit_map.map.get(&trigger.message.unit_id) {
+//         q.get_mut(e)
+//             .unwrap()
+//             .remove_effect(trigger.message.effect_id);
+//     } else {
+//         queue.queue.push(trigger.message.clone().into());
+//     }
+// }
 
 #[derive(Default, Debug, Component, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CustomData {

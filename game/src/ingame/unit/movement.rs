@@ -2,6 +2,8 @@ use bevy::prelude::*;
 use bevy_enhanced_input::prelude::*;
 use lightyear::prelude::*;
 use lobby_common::Team;
+use serde::Deserialize;
+use serde::Serialize;
 use vleue_navigator::prelude::*;
 
 use crate::AppExt;
@@ -36,7 +38,7 @@ use super::super::map::MessageChannel;
 use super::super::camera::MousePos;
 
 pub fn plugin(app: &mut App) {
-    app.register_component::<CurrentPath>(ChannelDirection::ServerToClient);
+    app.register_component::<CurrentPath>();
 
     app.add_observer(on_movement_start);
     app.add_observer(on_movement_end);
@@ -54,7 +56,7 @@ pub fn plugin(app: &mut App) {
         app.add_systems(FixedUpdate, unit_pathfinding);
         app.add_systems(FixedUpdate, refresh_movement_target_on_navmesh_reload);
         app.add_systems(FixedUpdate, move_unit_along_path);
-        app.add_observer(on_set_unit_movement_target);
+        // app.add_observer(on_set_unit_movement_target);
     }
 }
 
@@ -87,44 +89,44 @@ pub(crate) fn on_move_click(
     // Check if we clicked on enemy
     for (unit_id, pos, team) in q {
         if *team != my_team.0 && pos.distance(*mouse_pos.plane_pos) <= 0.5 {
-            commands.client_trigger::<MessageChannel>(SetAutoAttackTarget(*unit_id));
+            // commands.client_trigger::<MessageChannel>(SetAutoAttackTarget(*unit_id));
             return;
         }
     }
-    commands.client_trigger::<MessageChannel>(SetUnitMovementTarget(mouse_pos.plane_pos));
+    // commands.client_trigger::<MessageChannel>(SetUnitMovementTarget(mouse_pos.plane_pos));
 }
 
-pub(crate) fn on_set_unit_movement_target(
-    event: Trigger<FromClients<SetUnitMovementTarget>>,
-    // mut unit: Single<&mut MovementTarget>,
-    unit: Query<(Entity, &ControlledByClient, &StateList), With<Unit>>,
-    state_protos: Res<Protos<StateProto>>,
-    mut commands: Commands,
-) {
-    // let client = event.from();
+// pub(crate) fn on_set_unit_movement_target(
+//     event: Trigger<FromClients<SetUnitMovementTarget>>,
+//     // mut unit: Single<&mut MovementTarget>,
+//     unit: Query<(Entity, &ControlledByClient, &StateList), With<Unit>>,
+//     state_protos: Res<Protos<StateProto>>,
+//     mut commands: Commands,
+// ) {
+//     // let client = event.from();
 
-    // We need some way to get the currently controlled unit for this player.
-    for (unit, client, state) in unit {
-        if client.0 == event.from {
-            let (proto, _) = state_protos.get(&state.current_state().proto).unwrap();
-            if proto.move_cancellable {
-                commands
-                    .entity(unit)
-                    .remove::<(AutoAttackTarget, CurrentlyAutoAttacking)>()
-                    .insert(MovementTarget(event.message.0));
+//     // We need some way to get the currently controlled unit for this player.
+//     for (unit, client, state) in unit {
+//         if client.0 == event.from {
+//             let (proto, _) = state_protos.get(&state.current_state().proto).unwrap();
+//             if proto.move_cancellable {
+//                 commands
+//                     .entity(unit)
+//                     .remove::<(AutoAttackTarget, CurrentlyAutoAttacking)>()
+//                     .insert(MovementTarget(event.message.0));
 
-                if let Some(on_cancel) = proto.on_move_cancel.clone() {
-                    commands.queue(move |world: &mut World| {
-                        let lua = world.resource::<LuaCtx>().0.clone();
-                        lua.with_world(world, |_| {
-                            on_cancel.call::<()>(UnitProxy { entity: unit }).unwrap();
-                        });
-                    });
-                }
-            }
-        }
-    }
-}
+//                 if let Some(on_cancel) = proto.on_move_cancel.clone() {
+//                     commands.queue(move |world: &mut World| {
+//                         let lua = world.resource::<LuaCtx>().0.clone();
+//                         lua.with_world(world, |_| {
+//                             on_cancel.call::<()>(UnitProxy { entity: unit }).unwrap();
+//                         });
+//                     });
+//                 }
+//             }
+//         }
+//     }
+// }
 
 pub(crate) fn refresh_movement_target_on_navmesh_reload(
     units: Query<&mut MovementTarget>,

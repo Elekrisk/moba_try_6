@@ -19,7 +19,7 @@ use crate::{
 };
 use bevy::asset::uuid::Uuid;
 use bevy::{input_focus::InputFocus, prelude::*, state::state::FreelyMutableState};
-use lightyear::prelude::ConnectToken;
+use lightyear::netcode::ConnectToken;
 use lobby_common::{ClientToLobby, PlayerId};
 use lobby_list::{connected_to_lobby_server, MyPlayerId};
 

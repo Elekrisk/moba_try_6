@@ -72,7 +72,7 @@ fn reset_camera(
     input: Res<ButtonInput<KeyCode>>,
     mut focus: Single<&mut Transform, With<CameraFocus>>,
     q: Query<(&Transform, &ControlledByClient), Without<CameraFocus>>,
-    players: Res<Players>,
+    players: Single<&Players>,
     my_id: Res<MyPlayerId>,
 ) {
     if input.pressed(KeyCode::Space) {

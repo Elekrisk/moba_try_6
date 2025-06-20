@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use lightyear::prelude::*;
 use mlua::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     AppExt,
@@ -16,7 +17,7 @@ use crate::{
 };
 
 pub fn plugin(app: &mut App) {
-    app.register_component::<StateList>(ChannelDirection::ServerToClient);
+    app.register_component::<StateList>();
 
     let mut protos: Protos<StateProto> = Protos::from_world(app.world_mut());
     let lua = app.world().resource::<LuaCtx>().0.clone();

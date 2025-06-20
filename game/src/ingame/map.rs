@@ -1,27 +1,28 @@
 use std::path::PathBuf;
 
 use bevy::{
-    asset::{AssetLoader, AssetPath}, ecs::system::RunSystemOnce, math::VectorSpace, pbr::FogVolume, prelude::*
+    asset::{AssetLoader, AssetPath},
+    ecs::system::RunSystemOnce,
+    math::VectorSpace,
+    pbr::FogVolume,
+    prelude::*,
 };
 use bevy_enhanced_input::{
     events::Fired,
     prelude::{Actions, Binding, InputAction, InputContext, InputContextAppExt, Press},
 };
 use engine_common::{MapDef, MapId};
-use lightyear::prelude::{
-    AppChannelExt, AppComponentExt, Channel, ReliableSettings, Replicated, ServerReplicate,
-    server::SyncTarget,
-};
+use lightyear::prelude::{AppChannelExt, AppComponentExt, Channel, ReliableSettings, Replicated};
 use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    AppExt, Players, ServerOptions,
     ingame::{
         structure::Model,
         targetable::Health,
         unit::{ControlledByClient, SpawnUnit, SpawnUnitArgs, Unit},
-        
-    }, AppExt, Players, ServerOptions
+    },
 };
 
 use super::{
@@ -35,12 +36,13 @@ pub fn common(app: &mut App) {
         .setup_lua(setup_lua)
         .init_resource::<Protos<MapProto>>();
 
-    app.register_component::<MapEntity>(lightyear::prelude::ChannelDirection::ServerToClient);
+    app.register_component::<MapEntity>();
 
+    info!("Adding channel MessageChannel");
     app.add_channel::<MessageChannel>(lightyear::prelude::ChannelSettings {
         mode: lightyear::prelude::ChannelMode::OrderedReliable(ReliableSettings::default()),
         ..default()
-    });
+    }).add_direction(lightyear::prelude::NetworkDirection::ClientToServer);
 
     // Auto spawn map
     if app.is_client() {
@@ -69,12 +71,6 @@ pub fn common(app: &mut App) {
 }
 
 pub struct MessageChannel;
-
-impl Channel for MessageChannel {
-    fn name() -> &'static str {
-        "Message Channel"
-    }
-}
 
 #[derive(PartialEq)]
 pub struct MapProto {
@@ -177,17 +173,19 @@ pub struct SpawnPlayerUnits {}
 impl Command for SpawnPlayerUnits {
     fn apply(self, world: &mut World) -> () {
         // We need to get each player
-        world.resource_scope(|world, players: Mut<Players>| {
-            for player in players.players.values() {
-                let id = SpawnUnit(SpawnUnitArgs {
-                    proto: player.champion.0.clone(),
-                    position: Vec2::ZERO,
-                    team: player.team,
-                    data: super::unit::effect::CustomData::Nil,
-                }).apply(world);
-                world.entity_mut(id).insert(ControlledByClient(player.client_id));
-            }
-        });
+        let players = world.query::<&Players>().single(world).unwrap().clone();
+        for player in players.players.values() {
+            let id = SpawnUnit(SpawnUnitArgs {
+                proto: player.champion.0.clone(),
+                position: Vec2::ZERO,
+                team: player.team,
+                data: super::unit::effect::CustomData::Nil,
+            })
+            .apply(world);
+            world
+                .entity_mut(id)
+                .insert(ControlledByClient(player.client_id));
+        }
     }
 }
 

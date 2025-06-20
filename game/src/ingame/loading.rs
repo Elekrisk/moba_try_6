@@ -8,6 +8,7 @@ use bevy::{
 };
 use engine_common::{ChampionDef, ChampionId, MapId};
 use lightyear::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     AppExt, GameState, InGamePlayerInfo, Players,
@@ -22,9 +23,12 @@ use crate::{
 };
 
 pub fn plugin(app: &mut App) {
-    app.register_resource::<WhatToLoad>(ChannelDirection::ServerToClient);
-    app.register_resource::<ClientLoadStates>(ChannelDirection::ServerToClient);
-    app.register_trigger::<UpdateClientLoadState>(ChannelDirection::ClientToServer);
+    app.register_component::<WhatToLoad>();
+    app.register_component::<ClientLoadStates>();
+    // app.register_trigger::<UpdateClientLoadState>(ChannelDirection::ClientToServer);
+
+    // app.add_message::<UpdateClientLoadState>().add_direction(NetworkDirection::ClientToServer);
+    app.add_trigger::<UpdateClientLoadState>().add_direction(NetworkDirection::ClientToServer);
 
     app.add_sub_state::<LoadingState>();
 
@@ -33,12 +37,18 @@ pub fn plugin(app: &mut App) {
 
     if app.is_client() {
         // We need to know what to load, i.e. map and champs
-        app.add_systems(
-            Update,
-            (|mut commands: Commands| {
+        // app.add_systems(
+        //     Update,
+        //     (|mut commands: Commands| {
+        //         commands.set_state(LoadingState::LoadingDefs);
+        //     })
+        //     .run_if(resource_added::<WhatToLoad>),
+        // );
+        app.add_observer(
+            |trigger: Trigger<OnAdd, WhatToLoad>, mut commands: Commands| {
+                info!("We got sent what to load; entering LoadingDefs state");
                 commands.set_state(LoadingState::LoadingDefs);
-            })
-            .run_if(resource_added::<WhatToLoad>),
+            },
         );
         app.add_systems(OnEnter(GameState::Loading), spawn_loading_screen);
         app.add_systems(
@@ -48,34 +58,33 @@ pub fn plugin(app: &mut App) {
             ),
         );
     } else {
+        info!("We are server");
         // We already know what to load, as we were given that information from
-        // the lobby server
+        // the lobby serverMainScheduleOrder::default()
         app.add_systems(
             OnEnter(LoadingState::WaitingForWhatToLoad),
-            |mut commands: Commands| {
+            |players: Single<&Players>, mut commands: Commands| {
+                info!("Spawning what to load");
+                commands.spawn((
+                    WhatToLoad {
+                        // Hard code default map currently
+                        map: MapId("default".into()),
+                        champs: players.players
+                            .values()
+                            .map(|p| p.champion.clone())
+                            .collect(),
+                    },
+                    ClientLoadStates {
+                        load_states: players.players
+                            .values()
+                            .map(|p| (p.client_id, ClientLoadState::Loading(0.0)))
+                            .collect(),
+                    },
+                    Replicate::to_clients(NetworkTarget::All),
+                ));
                 commands.set_state(LoadingState::LoadingDefs);
             },
         );
-        app.insert_resource(WhatToLoad {
-            // Hard code default map currently
-            map: MapId("default".into()),
-            champs: app
-                .world()
-                .resource::<Players>()
-                .players
-                .values()
-                .map(|p| p.champion.clone())
-                .collect(),
-        });
-        app.insert_resource(ClientLoadStates {
-            load_states: app
-                .world()
-                .resource::<Players>()
-                .players
-                .values()
-                .map(|p| (p.client_id, ClientLoadState::Loading(0.0)))
-                .collect(),
-        });
 
         app.add_observer(on_update_client_load_state);
     }
@@ -119,7 +128,7 @@ pub enum LoadingState {
     LoadCompleted,
 }
 
-#[derive(Debug, Resource, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Component, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WhatToLoad {
     map: MapId,
     champs: Vec<ChampionId>,
@@ -146,12 +155,12 @@ impl UntypedAssetHolder {
 }
 
 fn start_loading_what_to_load(
-    what_to_load: Res<WhatToLoad>,
+    what_to_load: Single<&WhatToLoad>,
     asset_server: Res<AssetServer>,
     mut commands: Commands,
 ) {
-    commands.replicate_resource::<WhatToLoad, MessageChannel>(NetworkTarget::All);
-    commands.replicate_resource::<ClientLoadStates, MessageChannel>(NetworkTarget::All);
+    // commands.replicate_resource::<WhatToLoad, MessageChannel>(NetworkTarget::All);
+    // commands.replicate_resource::<ClientLoadStates, MessageChannel>(NetworkTarget::All);
 
     info!(
         "We are starting to load the following deps: {:#?}",
@@ -555,9 +564,9 @@ fn wait_for_assets(
     }
 }
 
-#[derive(Clone, Resource, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Component, PartialEq, Serialize, Deserialize)]
 pub struct ClientLoadStates {
-    load_states: HashMap<ClientId, ClientLoadState>,
+    load_states: HashMap<PeerId, ClientLoadState>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -572,16 +581,16 @@ pub struct UpdateClientLoadState {
 }
 
 fn on_update_client_load_state(
-    trigger: Trigger<FromClients<UpdateClientLoadState>>,
-    mut states: ResMut<ClientLoadStates>,
+    trigger: Trigger<RemoteTrigger<UpdateClientLoadState>>,
+    mut states: Single<&mut ClientLoadStates>,
 ) {
     states
         .load_states
-        .insert(trigger.from(), trigger.message().state);
+        .insert(trigger.from, trigger.trigger.state);
 }
 
 fn wait_until_all_clients_loaded(
-    client_load_states: Res<ClientLoadStates>,
+    client_load_states: Single<&ClientLoadStates>,
     mut commands: Commands,
 ) {
     if client_load_states
@@ -594,13 +603,13 @@ fn wait_until_all_clients_loaded(
     }
 }
 
-fn start_map_load(what_to_load: Res<WhatToLoad>, mut commands: Commands) {
+fn start_map_load(what_to_load: Single<&WhatToLoad>, mut commands: Commands) {
     commands.queue(LoadMap(what_to_load.map.clone()));
     commands.set_state(GameState::InGame);
 }
 
-fn cleanup_loading(mut commands: Commands) {
-    commands.remove_resource::<WhatToLoad>();
+fn cleanup_loading(e: Single<Entity, With<WhatToLoad>>, mut commands: Commands) {
+    commands.entity(*e).try_despawn();
 }
 
 #[derive(Component)]
@@ -620,12 +629,13 @@ fn spawn_loading_screen(mut commands: Commands) {
 }
 
 fn loading_screen(
-    states: Option<Res<ClientLoadStates>>,
-    players: Option<Res<Players>>,
+    states: Option<Single<Ref<ClientLoadStates>>>,
+    players: Option<Single<&Players>>,
 ) -> Option<impl View + use<>> {
     let (Some(states), Some(players)) = (states, players) else {
         return Some(
             ListView::new()
+                .with("PLACEHOLDER")
                 .styled()
                 .flex_direction(FlexDirection::Column)
                 .flex_grow(1.0)
@@ -709,7 +719,7 @@ fn player_loading(player: &InGamePlayerInfo, state: &ClientLoadState) -> ListVie
     player_thing
 }
 
-fn update_load_status(holder: Res<UntypedAssetHolder>, mut commands: Commands) {
+fn update_load_status(holder: Res<UntypedAssetHolder>, mut sender: Single<&mut TriggerSender<UpdateClientLoadState>>) {
     let is_done = holder.done_assets.len() == holder.total_asset_count;
     let state = if is_done {
         ClientLoadState::Done
@@ -717,7 +727,8 @@ fn update_load_status(holder: Res<UntypedAssetHolder>, mut commands: Commands) {
         let progress = holder.done_assets.len() as f32 / holder.total_asset_count as f32;
         ClientLoadState::Loading(progress)
     };
-    commands.client_trigger::<MessageChannel>(UpdateClientLoadState { state });
+    
+    sender.trigger::<MessageChannel>(UpdateClientLoadState { state });
 }
 
 #[derive(Reflect, Asset)]

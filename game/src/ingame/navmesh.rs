@@ -1,7 +1,7 @@
 use std::{f32::consts::FRAC_PI_2, ops::Deref};
 
 use bevy::prelude::*;
-use lightyear::prelude::{AppComponentExt, ChannelDirection, ServerReplicate};
+use lightyear::prelude::{AppComponentExt, ControlledBy, NetworkTarget, Replicate};
 use serde::{Deserialize, Serialize};
 use vleue_navigator::{
     NavMesh, Triangulation, VleueNavigatorPlugin,
@@ -21,7 +21,7 @@ pub fn common(app: &mut App) {
         NavmeshUpdaterPlugin::<TerrainData>::default(),
     ));
 
-    app.register_component::<TerrainData>(ChannelDirection::ServerToClient);
+    app.register_component::<TerrainData>();
 
     // Temporary setup
     app.add_systems(Startup, setup);
@@ -84,7 +84,7 @@ fn update_terrain(
                 // uuid: object.uuid,
                 vertices: object.vertices.clone(),
             },
-            ServerReplicate::default(),
+            Replicate::to_clients(NetworkTarget::All),
             SpawnedTerrainEntity,
         ));
     }

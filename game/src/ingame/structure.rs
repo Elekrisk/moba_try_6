@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 use lightyear::prelude::{
-    AppComponentExt, ChannelDirection, ServerReplicate, client::ComponentSyncMode,
+    AppComponentExt, NetworkTarget, Replicate
 };
 use lobby_common::Team;
 use mlua::prelude::*;
@@ -32,8 +32,8 @@ pub fn common(app: &mut App) {
         app.add_observer(on_insert_model);
     }
 
-    app.register_component::<Model>(ChannelDirection::ServerToClient);
-    app.register_component::<Structure>(ChannelDirection::ServerToClient);
+    app.register_component::<Model>();
+    app.register_component::<Structure>();
 }
 
 #[derive(PartialEq)]
@@ -118,7 +118,7 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
                         MapEntity,
                         Structure,
                         UnitId(Uuid::new_v4()),
-                        ServerReplicate::default(),
+                        Replicate::to_clients(NetworkTarget::All),
                     ))
                     .id();
 

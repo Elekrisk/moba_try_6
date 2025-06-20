@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use engine_common::ChampionId;
-use lightyear::prelude::ConnectToken;
+use lightyear::netcode::ConnectToken;
 use lobby_common::{
     ClientToLobby, LobbyId, LobbyInfo, LobbyShortInfo, LobbyToClient, PlayerId, PlayerInfo, Team,
 };

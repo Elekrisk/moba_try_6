@@ -27,6 +27,7 @@ use bevy::{
 use lightyear::prelude::*;
 use lobby_common::Team;
 use mlua::prelude::*;
+use serde::{Deserialize, Serialize};
 
 pub mod animation;
 pub mod attack;
@@ -49,12 +50,12 @@ pub fn common(app: &mut App) {
         collision::plugin,
     ));
 
-    app.register_trigger::<SetUnitMovementTarget>(ChannelDirection::ClientToServer);
-    app.register_component::<MovementTarget>(ChannelDirection::ServerToClient);
-    app.register_component::<Unit>(ChannelDirection::ServerToClient);
-    app.register_component::<UnitId>(ChannelDirection::ServerToClient);
-    app.register_component::<UnitType>(ChannelDirection::ServerToClient);
-    app.register_component::<ControlledByClient>(ChannelDirection::ServerToClient);
+    // app.register_trigger::<SetUnitMovementTarget>(ChannelDirection::ClientToServer);
+    app.register_component::<MovementTarget>();
+    app.register_component::<Unit>();
+    app.register_component::<UnitId>();
+    app.register_component::<UnitType>();
+    app.register_component::<ControlledByClient>();
 
     app.init_resource::<Protos<UnitProto>>();
     app.init_resource::<UnitMap>();
@@ -120,7 +121,7 @@ impl SpawnUnit {
                 StatBlock::from(proto.base_stats.clone()),
                 UnitId(Uuid::new_v4()),
                 StateScoped(GameState::InGame),
-                ServerReplicate::default(),
+                Replicate::to_clients(NetworkTarget::All),
             ))
             .id();
 
@@ -231,7 +232,7 @@ pub struct MovementTarget(pub Position);
 pub struct SetUnitMovementTarget(Position);
 
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ControlledByClient(pub ClientId);
+pub struct ControlledByClient(pub PeerId);
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UnitType {

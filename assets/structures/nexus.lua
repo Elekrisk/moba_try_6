@@ -285,7 +285,7 @@ end
 
 game.register_effect {
     id = "nexus.minion_spawning",
-    update_rate = 0.1,
+    update_rate = 1,
     on_update = function(unit, effect)
         local data = effect:get_custom_data() :: MinionSpawnData
 

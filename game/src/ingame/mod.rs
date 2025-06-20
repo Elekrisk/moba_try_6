@@ -1,12 +1,9 @@
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+
 use bevy::{ecs::entity::MapEntities, platform::collections::HashMap, prelude::*};
 use engine_common::ChampionId;
-use lightyear::{
-    client::config::ClientConfig,
-    prelude::{
-        AppResourceExt, ClientDisconnectEvent, ClientId, ConnectToken, ReplicateResourceExt,
-        client::{self, Authentication, ClientCommandsExt},
-    },
-};
+use lightyear::prelude::client::*;
+use lightyear::{netcode::ConnectToken, prelude::*};
 use lobby_common::{PlayerId, Team};
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +28,7 @@ pub mod vision;
 
 pub fn client(app: &mut App) {
     app.add_plugins((network::client, camera::client, terrain::client))
-        .add_systems(Update, on_disconnect);
+        .add_observer(on_disconnect);
     common(app);
 }
 pub fn server(app: &mut App) {
@@ -53,24 +50,25 @@ pub fn common(app: &mut App) {
         vision::plugin,
     ));
 
-    app.register_resource::<Players>(lightyear::prelude::ChannelDirection::ServerToClient);
-    app.add_systems(Startup, |mut commands: Commands| {
-        commands
-            .replicate_resource::<Players, MessageChannel>(lightyear::prelude::NetworkTarget::All);
-    });
+    app.register_component::<Players>();
+    // app.register_resource::<Players>(lightyear::prelude::ChannelDirection::ServerToClient);
+    // app.add_systems(Startup, |mut commands: Commands| {
+    //     commands
+    //         .replicate_resource::<Players, MessageChannel>(lightyear::prelude::NetworkTarget::All);
+    // });
 
     if app.is_client() {
         app.add_systems(
             Update,
-            players_added.run_if(resource_exists_and_changed::<Players>),
+            players_added,
         );
 
         // TODO: Temporary until game menu is implemented
         app.add_systems(
             Update,
-            |input: Res<ButtonInput<KeyCode>>, mut commands: Commands| {
+            |input: Res<ButtonInput<KeyCode>>, client: Single<Entity, With<Client>>, mut commands: Commands| {
                 if input.just_pressed(KeyCode::Escape) {
-                    commands.disconnect_client();
+                    commands.trigger_targets(Disconnect, *client);
                 }
             },
         );
@@ -78,11 +76,9 @@ pub fn common(app: &mut App) {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SystemSets {
-    
-}
+pub struct SystemSets {}
 
-fn players_added(players: Res<Players>, my_id: Res<MyPlayerId>, mut commands: Commands) {
+fn players_added(players: Single<&Players, Changed<Players>>, my_id: Res<MyPlayerId>, mut commands: Commands) {
     for player in players.players.values() {
         if player.id == my_id.0 {
             commands.insert_resource(MyTeam(player.team));
@@ -94,26 +90,38 @@ pub struct ConnectToGameServer(pub ConnectToken);
 
 impl Command for ConnectToGameServer {
     fn apply(self, world: &mut World) {
-        let client::NetConfig::Netcode { auth, .. } = &mut world.resource_mut::<ClientConfig>().net
-        else {
-            unreachable!()
-        };
+        // let client::NetConfig::Netcode { auth, .. } = &mut world.resource_mut::<ClientConfig>().net
+        // else {
+        //     unreachable!()
+        // };
 
-        *auth = Authentication::Token(self.0);
+        // *auth = Authentication::Token(self.0);
 
-        world.connect_client();
+        // world.connect_client();
+        let client = world
+            .spawn((
+                Client::default(),
+                NetcodeClient::new(Authentication::Token(self.0), NetcodeConfig::default())
+                    .unwrap(),
+                ReplicationReceiver::default(),
+                LocalAddr(SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0)),
+                PeerAddr(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0))),
+                UdpIo::default(),
+            ))
+            .id();
+        world.trigger_targets(Connect, client);
         world.commands().set_state(GameState::Loading);
     }
 }
 
-fn on_disconnect(mut events: EventReader<ClientDisconnectEvent>, mut commands: Commands) {
-    for event in events.read() {
-        info!("Disconnect: {event:?}");
-        commands.set_state(GameState::NotInGame);
+fn on_disconnect(trigger: Trigger<OnAdd, Disconnected>, q: Query<&Disconnected>, mut commands: Commands) {
+    if let Some(reason) = &q.get(trigger.target()).unwrap().reason {
+        info!("Disconnect: {:?}", reason);
     }
+    commands.set_state(GameState::NotInGame);
 }
 
-#[derive(Resource, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Players {
     pub players: HashMap<PlayerId, InGamePlayerInfo>,
 }
@@ -129,7 +137,7 @@ impl MapEntities for Players {
 #[derive(Resource, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InGamePlayerInfo {
     pub id: PlayerId,
-    pub client_id: ClientId,
+    pub client_id: PeerId,
     pub name: String,
     pub team: Team,
     pub champion: ChampionId,

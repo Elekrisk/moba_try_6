@@ -1,9 +1,9 @@
 use bevy::prelude::*;
-use lightyear::prelude::{AppComponentExt, ChannelDirection};
+use lightyear::prelude::{AppComponentExt};
 use serde::{Deserialize, Serialize};
 
 pub fn plugin(app: &mut App) {
-    app.register_component::<StatBlock>(ChannelDirection::ServerToClient);
+    app.register_component::<StatBlock>();
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Serialize, Deserialize)]

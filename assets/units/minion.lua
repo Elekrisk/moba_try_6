@@ -8,8 +8,8 @@ game.register_unit{
     attack_type = "melee",
     base_stats = {
         max_health = 100.0,
-        move_speed = 10.0,
-        attack_speed = 10.0,
+        move_speed = 1.5,
+        attack_speed = 1.0,
         attack_a = 10.0,
         attack_b = 0.0,
         attack_c = 0.0,

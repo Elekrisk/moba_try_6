@@ -12,7 +12,7 @@
 #![feature(try_blocks)]
 #![feature(iter_collect_into)]
 
-use std::{fmt::Display, net::SocketAddr, path::PathBuf};
+use std::{fmt::Display, net::SocketAddr, path::PathBuf, time::Duration};
 
 use bevy::{
     asset::AssetLoader,
@@ -77,6 +77,12 @@ pub fn server(app: &mut App) {
     //         }
     //     },
     // );
+    app.add_observer(|trigger: Trigger<OnAdd, LinkOf>, mut commands: Commands| {
+        commands.entity(trigger.target()).insert((
+            ReplicationSender::new(Duration::from_secs_f64(1.0 / 20.0), SendUpdatesMode::SinceLastAck, false),
+            Name::new("Client")
+        ));
+    });
     common(app);
 }
 

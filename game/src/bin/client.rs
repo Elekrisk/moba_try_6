@@ -62,7 +62,7 @@ fn main() -> AppExit {
                 })
                 .set(LogPlugin {
                     custom_layer,
-                    // filter: "lightyear=debug,lightyear::client::sync=info".into(),
+                    // filter: "lightyear=trace".into(),
                     // level: bevy::log::Level::DEBUG,
                     ..default()
                 }),
@@ -119,7 +119,7 @@ fn toggle_stat_display(
     unit_text: Option<Single<&mut Text, With<UnitText>>>,
     server_update_text: Option<Single<&mut Text, (With<ServerUpdateText>, Without<UnitText>)>>,
     units: Query<(), With<Unit>>,
-    server_update: Res<ServerFixedUpdateDuration>,
+    // server_update: Res<ServerFixedUpdateDuration>,
     fps: Option<ResMut<FpsOverlayConfig>>,
     mut commands: Commands,
 ) {
@@ -153,11 +153,11 @@ fn toggle_stat_display(
             unit_text.0 = format!("Units: {len}");
         }
         if let Some(mut server_update_text) = server_update_text {
-            server_update_text.0 = format!(
-                "Server tick duration: {:.4}s\nServer tick rate: {:.1}",
-                server_update.0,
-                (1.0 / server_update.0).min(20.0)
-            );
+            // server_update_text.0 = format!(
+            //     "Server tick duration: {:.4}s\nServer tick rate: {:.1}",
+            //     server_update.0,
+            //     (1.0 / server_update.0).min(20.0)
+            // );
         }
     }
 }
