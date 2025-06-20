@@ -2,8 +2,15 @@ use std::path::PathBuf;
 
 use bevy::{asset::AssetLoader, prelude::*};
 use engine_common::{ChampionDef, ChampionId};
+use serde::{Deserialize, Serialize};
 
 use crate::ingame::lua::LuaScript;
+
+use super::Unit;
+
+// #[derive(Component, Default, Clone, PartialEq, Serialize, Deserialize)]
+// #[require(Unit)]
+// pub struct Champion;
 
 pub fn plugin(app: &mut App) {
     app.init_asset::<ChampionDefAsset>()

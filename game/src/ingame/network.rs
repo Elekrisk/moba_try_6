@@ -59,20 +59,20 @@ pub fn server(app: &mut App) {
 
 pub fn common(app: &mut App) {
     if app.is_client() {
-        app.add_plugins(client::VisualInterpolationPlugin::<Transform>::default());
+        // app.add_plugins(client::VisualInterpolationPlugin::<Transform>::default());
     }
-    app.register_component::<Transform>(ChannelDirection::ServerToClient)
-        .add_interpolation(ComponentSyncMode::Full)
-        .add_interpolation_fn(|from, to, t| {
-            let trans = from.translation.lerp(to.translation, t);
-            let rot = from.rotation.slerp(to.rotation, t);
-            let scale = from.scale.lerp(to.scale, t);
+    // app.register_component::<Transform>(ChannelDirection::ServerToClient)
+    //     .add_interpolation(ComponentSyncMode::Full)
+    //     .add_interpolation_fn(|from, to, t| {
+    //         let trans = from.translation.lerp(to.translation, t);
+    //         let rot = from.rotation.slerp(to.rotation, t);
+    //         let scale = from.scale.lerp(to.scale, t);
 
-            Transform::default()
-                .with_translation(trans)
-                .with_rotation(rot)
-                .with_scale(scale)
-        });
+    //         Transform::default()
+    //             .with_translation(trans)
+    //             .with_rotation(rot)
+    //             .with_scale(scale)
+    //     });
     app.register_component::<Team>(ChannelDirection::ServerToClient);
 }
 
@@ -83,6 +83,8 @@ pub struct ServerOptions {
     pub address_ipv6: Ipv6Addr,
     pub internal_port: u16,
     pub external_port: u16,
+    #[arg(long)]
+    pub direct_connect: bool,
 }
 
 #[derive(Resource)]

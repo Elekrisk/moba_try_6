@@ -24,6 +24,8 @@ use crate::{
     },
 };
 
+use super::targetable::Position;
+
 pub fn plugin(app: &mut App) {
     app.register_component::<VisibleBy>(ChannelDirection::ServerToClient);
     app.register_component::<SightRange>(ChannelDirection::ServerToClient);
@@ -41,7 +43,7 @@ pub fn plugin(app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), setup_fow);
 
         app.add_systems(
-            FixedUpdate,
+            Update,
             change_visibility.run_if(in_state(GameState::InGame)),
         );
         // app.add_systems(
@@ -66,7 +68,7 @@ pub fn plugin(app: &mut App) {
 
         app.add_systems(
             Update,
-            (render_fog_of_war, move_fow_mesh).run_if(in_state(GameState::InGame)),
+            (render_fog_of_war, move_fow_mesh).chain().run_if(in_state(GameState::InGame)),
         );
     }
 }
@@ -92,7 +94,7 @@ fn on_sight_removed(trigger: Trigger<OnRemove, SightRange>, q: Query<&mut Visibl
 pub fn update_visibility(
     mut q: Query<(
         Entity,
-        Ref<Transform>,
+        Ref<Position>,
         &Team,
         &SightRange,
         &mut VisibleByEntities,
@@ -102,29 +104,26 @@ pub fn update_visibility(
     let mut iter = q.iter_combinations_mut();
     while let Some(
         [
-            (a, a_trans, a_team, a_range, mut a_vis_es),
-            (b, b_trans, b_team, b_range, mut b_vis_es),
+            (a, a_pos, a_team, a_range, mut a_vis_es),
+            (b, b_pos, b_team, b_range, mut b_vis_es),
         ],
     ) = iter.fetch_next()
     {
-        if (!a_trans.is_changed() && !b_trans.is_changed() && !terrain.is_changed())
+        if (!a_pos.is_changed() && !b_pos.is_changed() && !terrain.is_changed())
             || (a_team == b_team)
         {
             continue;
         }
 
-        let a_pos = a_trans.translation.xz();
-        let b_pos = b_trans.translation.xz();
-
         // Whether the units are in sight range
-        let a_reaches = a_pos.distance_squared(b_pos) <= a_range.0 * a_range.0;
-        let b_reaches = b_pos.distance_squared(a_pos) <= b_range.0 * b_range.0;
+        let a_reaches = a_pos.distance_squared(**b_pos) <= a_range.0 * a_range.0;
+        let b_reaches = b_pos.distance_squared(**a_pos) <= b_range.0 * b_range.0;
 
         // If there is a free sightline between them
         // If neither part is in range of the other, don't actually do the check,
         // as they can't see each other either way
         let can_see = (a_reaches || b_reaches)
-            && can_see(&terrain, a_trans.translation.xz(), b_trans.translation.xz());
+            && can_see(&terrain, **a_pos, **b_pos);
 
         // Whether the specific part sees the other
         let a_sees = a_reaches && can_see;
@@ -154,6 +153,10 @@ pub fn update_visibility(
 }
 
 fn can_see(terrain: &Terrain, a: Vec2, b: Vec2) -> bool {
+    // Convert to world space coords, as these are what the terrain are in
+    let a = vec2(a.x, -a.y);
+    let b = vec2(b.x, -b.y);
+
     let line = Segment2d::new(a, b);
 
     for object in &terrain.objects {
@@ -224,7 +227,7 @@ fn aabb_collide(aabb: Aabb2d, segment: Segment2d) -> bool {
 fn segments_collide(a: Segment2d, b: Segment2d) -> bool {
     let (t, u) = segments_intersection(a, b);
 
-    0.0 <= t && t <= 1.0 && 0.0 <= u && u <= 1.0
+    (0.0..=1.0).contains(&t) && (0.0..=1.0).contains(&u)
 }
 
 fn segments_intersection(a: Segment2d, b: Segment2d) -> (f32, f32) {
@@ -490,7 +493,7 @@ struct FoWMeshes(Entity);
 
 fn render_fog_of_war(
     mut buf: Local<Vec<&TerrainObject>>,
-    q: Query<(Entity, &Transform, &Team, &SightRange, Option<&FoWMeshes>)>,
+    q: Query<(Entity, &Position, &Team, &SightRange, Option<&FoWMeshes>)>,
     mut fow: Query<&mut Mesh3d>,
     terrain: Res<Terrain>,
     my_team: Res<MyTeam>,
@@ -500,12 +503,12 @@ fn render_fog_of_war(
     mut commands: Commands,
 ) {
     let terrain = &*terrain;
-    for (e, trans, team, range, fow_meshes) in q {
+    for (e, pos, team, range, fow_meshes) in q {
         if *team != my_team.0 {
             continue;
         }
 
-        let pos = trans.translation.xz();
+        let pos = vec2(pos.x, -pos.y);
 
         // Get all terrain objects in range
 
@@ -846,7 +849,7 @@ fn render_fog_of_war(
                 Mesh3d(mesh),
                 MeshMaterial3d(mat),
                 FoWMeshOf(e),
-                Transform::from_translation(trans.translation),
+                Transform::from_translation(vec3(pos.x, 0.0, -pos.y)),
                 RenderLayers::layer(1),
             ));
         }
@@ -856,9 +859,9 @@ fn render_fog_of_war(
     }
 }
 
-fn move_fow_mesh(q: Query<(&mut Transform, &FoWMeshOf)>, t: Query<&Transform, Without<FoWMeshOf>>) {
+fn move_fow_mesh(q: Query<(&mut Transform, &FoWMeshOf)>, t: Query<&Position, Without<FoWMeshOf>>) {
     for (mut trans, fow_mesh_of) in q {
-        let par_trans = t.get(fow_mesh_of.0).unwrap();
-        trans.translation = par_trans.translation.with_y(0.01);
+        let par_pos = t.get(fow_mesh_of.0).unwrap();
+        trans.translation = par_pos.into();
     }
 }

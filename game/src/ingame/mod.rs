@@ -77,6 +77,11 @@ pub fn common(app: &mut App) {
     }
 }
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SystemSets {
+    
+}
+
 fn players_added(players: Res<Players>, my_id: Res<MyPlayerId>, mut commands: Commands) {
     for player in players.players.values() {
         if player.id == my_id.0 {
@@ -88,7 +93,7 @@ fn players_added(players: Res<Players>, my_id: Res<MyPlayerId>, mut commands: Co
 pub struct ConnectToGameServer(pub ConnectToken);
 
 impl Command for ConnectToGameServer {
-    fn apply(self, world: &mut World) -> () {
+    fn apply(self, world: &mut World) {
         let client::NetConfig::Netcode { auth, .. } = &mut world.resource_mut::<ClientConfig>().net
         else {
             unreachable!()

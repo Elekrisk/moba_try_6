@@ -1,7 +1,7 @@
 use bevy::{prelude::*, window::PrimaryWindow};
 use bevy_enhanced_input::prelude::{ActionState, *};
 
-use crate::client_setup;
+use crate::{client_setup, main_ui::lobby_list::MyPlayerId, GameState};
 
 #[derive(Component)]
 pub struct PrimaryCamera;
@@ -18,7 +18,7 @@ pub fn client(app: &mut App) {
                 drag_camera,
                 reset_camera,
             )
-                .chain(),
+                .chain().run_if(in_state(GameState::InGame)),
         );
 }
 
@@ -48,7 +48,7 @@ fn move_camera_on_mouse_edges(
         return;
     };
 
-    let edge_margin = 1.0;
+    let edge_margin = 10.0;
 
     let size = window.size();
 
@@ -71,9 +71,19 @@ fn move_camera_on_mouse_edges(
 fn reset_camera(
     input: Res<ButtonInput<KeyCode>>,
     mut focus: Single<&mut Transform, With<CameraFocus>>,
+    q: Query<(&Transform, &ControlledByClient), Without<CameraFocus>>,
+    players: Res<Players>,
+    my_id: Res<MyPlayerId>,
 ) {
     if input.pressed(KeyCode::Space) {
-        focus.translation = Vec3::ZERO;
+        // focus.translation = Vec3::ZERO;
+
+        let my_client_id =  players.players.get(&my_id.0).unwrap().client_id;
+        for (trans, control) in q {
+            if control.0 == my_client_id {
+                focus.translation = trans.translation;
+            }
+        }
     }
 }
 
@@ -82,7 +92,7 @@ pub struct CameraFocus;
 
 #[derive(Default, Resource)]
 pub struct MousePos {
-    pub plane_pos: Vec2,
+    pub plane_pos: Position,
     pub world_pos: Vec3,
 }
 
@@ -100,7 +110,7 @@ fn update_mouse_pos(
     let ray = camera.viewport_to_world(camera_pos, pos).unwrap();
     if let Some(pos) = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d::new(Vec3::Y)) {
         let pos = ray.get_point(pos);
-        mouse_pos.plane_pos = pos.xz();
+        mouse_pos.plane_pos = pos.into();
         mouse_pos.world_pos = pos;
     }
 }
@@ -118,7 +128,7 @@ struct CameraZoom;
 
 fn drag_camera(
     input: Single<&Actions<CameraInput>>,
-    mut start_drag_pos: Local<Option<Vec2>>,
+    mut start_drag_pos: Local<Option<Position>>,
     mouse_pos: Res<MousePos>,
     mut focus: Single<&mut Transform, With<CameraFocus>>,
 ) {
@@ -130,10 +140,10 @@ fn drag_camera(
             }
             let start = start_drag_pos.unwrap();
 
-            let diff = mouse_pos.plane_pos - start;
+            let diff = *mouse_pos.plane_pos - *start;
 
             focus.translation.x -= diff.x;
-            focus.translation.z -= diff.y;
+            focus.translation.z += diff.y;
         }
         _ => {}
     }
@@ -151,6 +161,8 @@ fn zoom_camera(
 use std::marker::PhantomData;
 
 use bevy::{ecs::query::QuerySingleError, prelude::*, ui::UiSystem};
+
+use super::{targetable::Position, unit::ControlledByClient, Players};
 
 /// Defines where the point that is anchored is located on the height of UI node that is anchored
 #[derive(Default, Reflect, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

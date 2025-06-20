@@ -30,6 +30,7 @@ pub fn plugin(app: &mut App) {
                 move_cancellable: true,
                 on_move_cancel: None,
                 animation: "Idle".into(),
+                loop_animation: true,
             }
             .into_lua(&lua)
             .unwrap(),
@@ -46,6 +47,7 @@ pub fn plugin(app: &mut App) {
                 move_cancellable: true,
                 on_move_cancel: None,
                 animation: "Moving".into(),
+                loop_animation: true,
             }
             .into_lua(&lua)
             .unwrap(),
@@ -75,6 +77,7 @@ pub fn plugin(app: &mut App) {
                     .unwrap(),
                 ),
                 animation: "AutoAttack".into(),
+                loop_animation: false,
             }
             .into_lua(&lua)
             .unwrap(),
@@ -97,6 +100,7 @@ pub struct StateProto {
     pub move_cancellable: bool,
     pub on_move_cancel: Option<LuaFunction>,
     pub animation: String,
+    pub loop_animation: bool,
 }
 
 proto!(
@@ -107,19 +111,27 @@ proto!(
         pub move_cancellable: bool,
         pub on_move_cancel: Option<LuaFunction>,
         pub animation: String,
+        pub loop_animation: bool,
     }
 );
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct State {
     pub proto: String,
+    pub animation_speed: f32,
 }
 
 impl State {
     pub fn new(proto: impl Into<String>) -> Self {
         Self {
             proto: proto.into(),
+            animation_speed: 1.0,
         }
+    }
+
+    pub fn with_animation_speed(mut self, speed: f32) -> Self {
+        self.animation_speed = speed;
+        self
     }
 
     pub fn idle() -> Self {
@@ -131,10 +143,12 @@ impl State {
     }
 }
 
-#[derive(Debug, Component, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Component, PartialEq, Serialize, Deserialize)]
 pub struct StateList {
     /// Invariant: Always holds at least one state
     states: Vec<State>,
+    /// Used to force replicating change ticks
+    x: u8,
 }
 
 impl StateList {
@@ -150,12 +164,18 @@ impl StateList {
         } else {
             self.states.push(state);
         }
+
+        self.x = self.x.wrapping_add(1);
     }
 
-    pub fn remove_state(&mut self, state: &State) {
-        if let Some(pos) = self.states.iter().position(|s| s.proto == state.proto) && pos != 0 {
+    pub fn remove_state(&mut self, state: &str) {
+        if let Some(pos) = self.states.iter().position(|s| s.proto == state)
+            && pos != 0
+        {
             self.states.remove(pos);
         }
+
+        self.x = self.x.wrapping_add(1);
     }
 
     pub fn current_state(&self) -> &State {
@@ -167,6 +187,7 @@ impl Default for StateList {
     fn default() -> Self {
         Self {
             states: vec![State::idle()],
+            x: 0,
         }
     }
 }
@@ -176,7 +197,10 @@ fn play_state_animation(
     protos: Res<Protos<StateProto>>,
 ) {
     for (state_list, mut man) in q {
-        let (proto, _) = protos.get(&state_list.current_state().proto).unwrap();
+        let current_state = state_list.current_state();
+        let (proto, _) = protos.get(&current_state.proto).unwrap();
         man.next_animation = proto.animation.clone();
+        man.speed = current_state.animation_speed;
+        man.loop_animation = proto.loop_animation;
     }
 }

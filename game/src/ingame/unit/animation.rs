@@ -72,6 +72,7 @@ pub(crate) fn attach_animation_controller(
 pub struct AnimationManager {
     pub next_animation: String,
     pub loop_animation: bool,
+    pub speed: f32,
 }
 
 impl AnimationManager {
@@ -79,26 +80,38 @@ impl AnimationManager {
         Self {
             next_animation: "Idle".into(),
             loop_animation: true,
+            speed: 1.0,
         }
     }
 }
 
-fn do_animation(q: Query<(&AnimationManager, &AnimationPlayerProxy, &Model), Changed<AnimationManager>>, mut player: Query<&mut AnimationPlayer>, anims: Res<GltfAnimations>, asset_server: Res<AssetServer>) {
+fn do_animation(
+    q: Query<(&AnimationManager, &AnimationPlayerProxy, &Model), Changed<AnimationManager>>,
+    mut player: Query<&mut AnimationPlayer>,
+    anims: Res<GltfAnimations>,
+    asset_server: Res<AssetServer>,
+) {
     for (man, proxy, model) in q {
         let Some(gltf_handle) = asset_server.get_handle(model.0.path()) else {
-            error!("Asset {} wasn't registered in lua script", model.0.path().display());
+            error!(
+                "Asset {} wasn't registered in lua script",
+                model.0.path().display()
+            );
             continue;
         };
         let (_, anims) = anims.map.get(&gltf_handle).unwrap();
-        let &anim = anims.get(&man.next_animation).or_else(|| anims.get("Idle")).unwrap();
+        let &anim = anims
+            .get(&man.next_animation)
+            .or_else(|| anims.get("Idle"))
+            .unwrap();
         let mut player = player.get_mut(proxy.0).unwrap();
-        if !player.is_playing_animation(anim) {
+        // if !player.is_playing_animation(anim) {
             player.stop_all();
-            let anim = player.play(anim);
+            let anim = player.play(anim).set_speed(man.speed);
             if man.loop_animation {
                 anim.repeat();
             }
-        }
+        // }
     }
 }
 

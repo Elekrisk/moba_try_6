@@ -12,7 +12,7 @@
 #![feature(try_blocks)]
 #![feature(iter_collect_into)]
 
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt::Display, net::SocketAddr, path::PathBuf};
 
 use bevy::{
     asset::AssetLoader,
@@ -30,14 +30,14 @@ mod ui;
 
 pub use ingame::{
     InGamePlayerInfo, Players,
-    network::{PROTOCOL_ID, PrivateKey, ServerOptions},
     camera::PrimaryCamera,
+    network::{PROTOCOL_ID, PrivateKey, ServerOptions},
     unit::Unit,
 };
 pub use network::Sess;
 
 use engine_common::{ChampList, ChampionDef, ChampionId};
-use lightyear::prelude::{AppResourceExt, ReplicateResourceExt, ServerConnectionManager};
+use lightyear::prelude::*;
 pub use network::LobbySender;
 use serde::{Deserialize, Serialize};
 
@@ -64,18 +64,19 @@ pub fn client(app: &mut App) {
 pub fn server(app: &mut App) {
     app.add_plugins(ingame::server);
     app.insert_state(GameState::Loading);
-    app.add_systems(
-        Update,
-        |ps: Option<Res<ServerConnectionManager>>,
-         mut exit: EventWriter<AppExit>,
-         time: Res<Time>| {
-            if let Some(server) = ps {
-                if server.connected_clients().next().is_none() && time.elapsed_secs() > 15.0 {
-                    exit.write(AppExit::Success);
-                }
-            }
-        },
-    );
+    // app.add_systems(
+    //     Update,
+    //     |ps: Option<Res<ServerConnectionManager>>,
+    //      mut exit: EventWriter<AppExit>,
+    //      time: Res<Time>| {
+    //         if let Some(server) = ps
+    //             && server.connected_clients().next().is_none()
+    //             && time.elapsed_secs() > 15.0
+    //         {
+    //             exit.write(AppExit::Success);
+    //         }
+    //     },
+    // );
     common(app);
 }
 
@@ -86,15 +87,15 @@ fn common(app: &mut App) {
         .add_systems(Update, wait_for_list_load)
         .add_systems(Startup, load_champ_defs);
 
-    app.init_resource::<ServerFixedUpdateDuration>();
-    app.register_resource::<ServerFixedUpdateDuration>(
-        lightyear::prelude::ChannelDirection::ServerToClient,
-    );
-    app.add_systems(Startup, |mut commands: Commands| {
-        commands.replicate_resource::<ServerFixedUpdateDuration, MessageChannel>(
-            lightyear::prelude::NetworkTarget::All,
-        );
-    });
+    // app.init_resource::<ServerFixedUpdateDuration>();
+    // app.register_resource::<ServerFixedUpdateDuration>(
+    //     lightyear::prelude::ChannelDirection::ServerToClient,
+    // );
+    // app.add_systems(Startup, |mut commands: Commands| {
+    //     commands.replicate_resource::<ServerFixedUpdateDuration, MessageChannel>(
+    //         lightyear::prelude::NetworkTarget::All,
+    //     );
+    // });
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, States)]
@@ -117,7 +118,7 @@ fn client_setup(mut commands: Commands) {
         // Transform::from_xyz(0.0, 55.0, 0.0).looking_at(Vec3::ZERO, Vec3::new(-1.0, 0.0, -1.0).normalize()),
         VolumetricFog::default(),
         UiCameraMarker,
-        PrimaryCamera
+        PrimaryCamera,
     ));
     commands.spawn((
         DirectionalLight {
@@ -131,6 +132,8 @@ fn client_setup(mut commands: Commands) {
 
 #[derive(Resource, clap::Parser)]
 pub struct Options {
+    #[arg(long)]
+    direct_connect: Option<SocketAddr>,
     #[arg(long)]
     connect: bool,
     #[arg(long, default_value_t = LobbyMode::None)]
@@ -195,21 +198,18 @@ fn wait_for_list_load(
     mut commands: Commands,
 ) {
     for e in event.read() {
-        match e {
-            AssetEvent::LoadedWithDependencies { id } => {
-                let asset = assets.get(*id).unwrap();
-                commands.insert_resource(ChampDefs {
-                    map: asset
-                        .map
-                        .values()
-                        .map(|handle| {
-                            let def = defs.get(handle).unwrap();
-                            (def.id.clone(), def.clone())
-                        })
-                        .collect(),
-                });
-            }
-            _ => {}
+        if let AssetEvent::LoadedWithDependencies { id } = e {
+            let asset = assets.get(*id).unwrap();
+            commands.insert_resource(ChampDefs {
+                map: asset
+                    .map
+                    .values()
+                    .map(|handle| {
+                        let def = defs.get(handle).unwrap();
+                        (def.id.clone(), def.clone())
+                    })
+                    .collect(),
+            });
         }
     }
 }

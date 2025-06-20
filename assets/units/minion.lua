@@ -4,11 +4,12 @@ game.register_asset("./minion.glb#Scene0")
 game.register_unit{
     id = "minion",
     name = "Minion",
+    unit_type = "normal",
     attack_type = "melee",
     base_stats = {
         max_health = 100.0,
-        move_speed = 1.5,
-        attack_speed = 1.0,
+        move_speed = 10.0,
+        attack_speed = 10.0,
         attack_a = 10.0,
         attack_b = 0.0,
         attack_c = 0.0,
@@ -19,7 +20,6 @@ game.register_unit{
     },
     model = "./minion.glb#Scene0",
     on_spawn = function (unit)
-        print("SPAWNED MINION")
         unit:apply_effect{
             proto = "minion.ai",
             data = {
@@ -29,14 +29,10 @@ game.register_unit{
     end
 }
 
--- AI DATA:
---[[
-
-{
-    path: list of Vec2
+type AiData = {
+    path: { Vec2 }
 }
 
-]]
 game.register_effect{
     id = "minion.ai",
     update_rate = 0.25,
@@ -44,19 +40,19 @@ game.register_effect{
         -- We need to get all visible enemies in a certain radius
         local units = my_unit:get_visible_units()
 
-        local closest_unit = nil;
+        local closest_unit: UnitProxy? = nil;
         local closest_dist = 1000000.0;
 
         local my_pos = my_unit:get_position();
 
-        local function sqr_dist(a, b)
+        local function sqr_dist(a: Vec2, b: Vec2)
             local diff = { x = a.x - b.x, y = a.y - b.y }
             return diff.x * diff.x + diff.y * diff.y
         end
 
         for _, unit in units do
             local dist = sqr_dist(my_pos, unit:get_position())
-            if dist < 25.0 and dist < closest_dist then
+            if dist < 10.0 and dist < closest_dist then
                 closest_dist = dist
                 closest_unit = unit
             end
@@ -67,7 +63,10 @@ game.register_effect{
         else
             -- No units close enough to target; we instead try to follow our path
             -- Our next waypoint is:
-            local data = my_unit:get_custom_data()
+            local data = my_unit:get_custom_data() :: AiData?
+            if data == nil then
+                return
+            end
             local next_waypoint = data.path[1]
 
             if next_waypoint == nil then

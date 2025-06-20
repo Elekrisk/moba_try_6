@@ -1,10 +1,7 @@
 use std::path::PathBuf;
 
 use bevy::{
-    asset::{AssetLoader, AssetPath},
-    ecs::system::RunSystemOnce,
-    pbr::FogVolume,
-    prelude::*,
+    asset::{AssetLoader, AssetPath}, ecs::system::RunSystemOnce, math::VectorSpace, pbr::FogVolume, prelude::*
 };
 use bevy_enhanced_input::{
     events::Fired,
@@ -184,7 +181,7 @@ impl Command for SpawnPlayerUnits {
             for player in players.players.values() {
                 let id = SpawnUnit(SpawnUnitArgs {
                     proto: player.champion.0.clone(),
-                    position: vec2(-19.6, 43.9),
+                    position: Vec2::ZERO,
                     team: player.team,
                     data: super::unit::effect::CustomData::Nil,
                 }).apply(world);

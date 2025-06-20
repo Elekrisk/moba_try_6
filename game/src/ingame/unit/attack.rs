@@ -7,20 +7,15 @@ use mlua::{FromLua, IntoLua};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AppExt, Options,
     ingame::{
         lua::{LuaCtx, LuaExt, Protos},
         structure::Model,
-        targetable::Health,
+        targetable::{Health, Position},
         unit::{
-            ControlledByClient, MovementTarget, UnitId, UnitMap, UnitProxy,
-            animation::{AnimationPlayerProxy, GltfAnimations},
-            movement::CurrentPath,
-            state::{State, StateList, StateProto},
-            stats::StatBlock,
+            animation::{AnimationPlayerProxy, GltfAnimations}, movement::CurrentPath, state::{State, StateList, StateProto}, stats::StatBlock, ControlledByClient, MovementTarget, UnitId, UnitMap, UnitProxy
         },
         vision::VisibleBy,
-    },
+    }, AppExt, Options
 };
 
 pub fn plugin(app: &mut App) {
@@ -107,7 +102,7 @@ fn perform_auto_attack(
             if timer.tick(time.delta_secs())
                 && let Some(cur_target) = is_autoing
                 && let Some(target) = target
-                && cur_target.0 == target.0
+                && cur_target.target == target.0
             {
                 // info!("Do the attack!");
                 // Do the attack
@@ -138,27 +133,29 @@ impl MapEntities for AutoAttackTarget {
     }
 }
 
-#[derive(Component, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, MapEntities)]
-pub struct CurrentlyAutoAttacking(Entity);
+#[derive(Component, Clone, Copy, PartialEq, Serialize, Deserialize, MapEntities)]
+pub struct CurrentlyAutoAttacking {
+    target: Entity,
+    speed: f32,
+}
 
 fn auto_attack(
     q: Query<(
         Entity,
+        &Position,
         &AutoAttackTarget,
         &StatBlock,
         &Team,
         &mut AutoAttackTimer,
         Option<&CurrentlyAutoAttacking>,
     )>,
-    target: Query<&VisibleBy>,
-    mut trans_q: Query<&mut Transform>,
+    target: Query<(&Position, &VisibleBy)>,
     opt: Option<Res<Options>>,
     mut commands: Commands,
 ) {
     let is_client = opt.is_some();
-    for (e, aa_target, stats, team, mut aa_timer, cur_target) in q {
-        let trans = trans_q.get(e).unwrap();
-        let Ok(vis) = target.get(aa_target.0) else {
+    for (e, pos, aa_target, stats, team, mut aa_timer, cur_target) in q {
+        let Ok((target_pos, vis)) = target.get(aa_target.0) else {
             // Target entity has been despawned
             let mut ec = commands.entity(e);
             ec.remove::<AutoAttackTarget>();
@@ -167,38 +164,35 @@ fn auto_attack(
             }
             continue;
         };
-        let target_trans = trans_q.get(aa_target.0).unwrap();
         if vis.0.contains(team) {
             // is in range?
-            if target_trans
-                .translation
-                .xz()
-                .distance(trans.translation.xz())
+            if target_pos
+                .distance(**pos)
                 <= stats.range.base
             {
-                let target1 = target_trans.translation;
-                let mut trans = trans_q.get_mut(e).unwrap();
-                trans.look_at(target1, Vec3::Y);
+                // let mut trans = trans_q.get_mut(e).unwrap();
+                // trans.look_at(target1, Vec3::Y);
                 if !is_client {
                     commands.entity(e).remove::<MovementTarget>();
                     commands.entity(e).remove::<CurrentPath>();
                 }
                 if aa_timer.timer <= 0.0 {
                     // we perform auto attack
-                    commands
-                        .entity(e)
-                        .insert(CurrentlyAutoAttacking(aa_target.0));
-                    aa_timer.set(stats.attack_speed.base);
+                    commands.entity(e).insert(CurrentlyAutoAttacking {
+                        target: aa_target.0,
+                        speed: stats.attack_speed.base,
+                    });
+                    aa_timer.set(stats.attack_speed.base.recip());
                 } else {
                     // we stand and wait
                 }
-            } else if cur_target.is_none() || cur_target.unwrap().0 != aa_target.0 {
+            } else if cur_target.is_none() || cur_target.unwrap().target != aa_target.0 {
                 // Move towards unit
                 // info!("MOVE TOWARDS UNIT");
                 commands
                     .entity(e)
                     .remove::<CurrentlyAutoAttacking>()
-                    .insert(MovementTarget(target_trans.translation.xz()));
+                    .insert(MovementTarget(*target_pos));
             }
         } else {
             // Cannot see; abort attack
@@ -314,7 +308,7 @@ fn on_set_auto_attack_target(
             info!("Setting auto attack target");
             let new_target = *unit_map.map.get(&trigger.message.0).unwrap();
             if let Some(cur_target) = cur_target
-                && cur_target.0 != new_target
+                && cur_target.target != new_target
             {
                 commands.entity(e).remove::<CurrentlyAutoAttacking>();
                 // Queue on_move_cancel
@@ -341,13 +335,16 @@ fn on_set_auto_attack_target(
 }
 
 fn on_start_aa(
-    trigger: Trigger<OnAdd, CurrentlyAutoAttacking>,
-    mut q: Query<&mut StateList>,
+    trigger: Trigger<OnInsert, CurrentlyAutoAttacking>,
+    mut q: Query<(&mut StateList, &CurrentlyAutoAttacking)>,
     states: Res<Protos<StateProto>>,
 ) {
-    q.get_mut(trigger.target())
-        .unwrap()
-        .add_state(State::new("attacking"), &states);
+    let (mut state_list, aa) = q.get_mut(trigger.target()).unwrap();
+    state_list.remove_state("attacking");
+    state_list.add_state(
+        State::new("attacking").with_animation_speed(aa.speed),
+        &states,
+    );
 }
 
 fn on_stop_aa(
@@ -355,7 +352,7 @@ fn on_stop_aa(
     mut q: Query<(&mut AutoAttackTimer, &mut StateList)>,
 ) {
     let (mut aa, mut state_list) = q.get_mut(trigger.target()).unwrap();
-    state_list.remove_state(&State::new("attacking"));
+    state_list.remove_state("attacking");
     if !aa.has_occurred {
         aa.timer = 0.0;
         aa.has_occurred = false;

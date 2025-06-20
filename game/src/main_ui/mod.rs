@@ -1,3 +1,5 @@
+use crate::PROTOCOL_ID;
+use crate::ingame::ConnectToGameServer;
 use crate::new_ui::Widget;
 use crate::{
     GameState, LobbySender, Options,
@@ -15,9 +17,11 @@ use crate::{
         tree::{OnceRunner, UiTree},
     },
 };
+use bevy::asset::uuid::Uuid;
 use bevy::{input_focus::InputFocus, prelude::*, state::state::FreelyMutableState};
-use lobby_common::ClientToLobby;
-use lobby_list::connected_to_lobby_server;
+use lightyear::prelude::ConnectToken;
+use lobby_common::{ClientToLobby, PlayerId};
+use lobby_list::{connected_to_lobby_server, MyPlayerId};
 
 pub mod in_champ_select;
 pub mod in_lobby;
@@ -64,6 +68,14 @@ pub fn create_ui(mut options: ResMut<Options>, mut commands: Commands) {
         },
         UiTree::once(ui_root2),
     ));
+    if let Some(addr) = options.direct_connect {
+        commands.insert_resource(MyPlayerId(PlayerId(Uuid::nil())));
+        commands.queue(ConnectToGameServer(
+            ConnectToken::build(addr, PROTOCOL_ID, 0, [0; 32])
+                .generate()
+                .unwrap(),
+        ));
+    }
     if options.connect {
         options.connect = false;
         commands.insert_resource(LobbyUrl("localhost".into()));

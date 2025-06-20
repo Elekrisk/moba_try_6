@@ -13,7 +13,7 @@ use vleue_navigator::{
 
 use crate::AppExt;
 
-use super::terrain::Terrain;
+use super::{targetable::Position, terrain::Terrain};
 
 pub fn common(app: &mut App) {
     app.add_plugins((
@@ -78,7 +78,8 @@ fn update_terrain(
 
     for object in &terrain.objects {
         commands.spawn((
-            Transform::default(),
+            // Transform::default(),
+            Position::default(),
             TerrainData {
                 // uuid: object.uuid,
                 vertices: object.vertices.clone(),
@@ -119,12 +120,8 @@ fn display_mesh(
     navmesh: Single<(&ManagedNavMesh, Ref<NavMeshStatus>)>,
 ) {
     let (navmesh_handle, status) = navmesh.deref();
-    if !status.is_changed() || **status != NavMeshStatus::Built
-    /*&& window_resized.is_empty()*/
-    {
-        if current_mesh_entity.is_some() {
-            return;
-        }
+    if (!status.is_changed() || **status != NavMeshStatus::Built) && current_mesh_entity.is_some() {
+        return;
     }
 
     let Some(navmesh) = navmeshes.get(*navmesh_handle) else {
@@ -183,7 +180,7 @@ impl ObstacleSource for TerrainData {
             .vertices
             .iter()
             .copied()
-            .map(|vertex| to_navmesh(vertex))
+            .map(to_navmesh)
             .collect();
 
         vec![vertices]

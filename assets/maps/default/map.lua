@@ -36,14 +36,14 @@ map.on_load = function()
     game.spawn_structure {
         proto = "nexus",
         team = 0,
-        position = { x = -42, y = 42 }
+        position = { x = -42, y = -42 }
     }
 
     -- red nexus
     game.spawn_structure {
         proto = "nexus",
         team = 1,
-        position = { x = 42, y = -42 }
+        position = { x = 42, y = 42 }
     }
 
     -- test spawning a unit
@@ -59,13 +59,15 @@ map.on_load = function()
     -- local minion = game.spawn_unit {
     --     proto = "minion",
     --     team = 0,
-    --     position = {x = -2.5, y = 2.5}
+    --     position = {x = -2.5, y = 2.5},
+    --     data = { path = {} }
     -- }
 
     -- local minion = game.spawn_unit {
     --     proto = "minion",
     --     team = 1,
-    --     position = {x = 2.5, y = -2.5}
+    --     position = {x = 2.5, y = -2.5},
+    --     data = { path = {} }
     -- }
 
     -- Spawning of turrets

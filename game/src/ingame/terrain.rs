@@ -274,6 +274,7 @@ enum EditingState {
 
 impl Eq for C {}
 
+#[allow(clippy::derive_ord_xor_partial_ord)]
 impl Ord for C {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
@@ -297,7 +298,7 @@ fn select_object(
     if let Some(object) = terrain
         .objects
         .iter()
-        .min_by_key(|object| C(object.center().distance_squared(mouse_pos.plane_pos)))
+        .min_by_key(|object| C(object.center().distance_squared(*mouse_pos.plane_pos)))
     {
         selected_object.0 = Some(object.uuid);
     }
@@ -321,9 +322,9 @@ fn drag_closest_vertex(
         if let Some(closest_vertex) = object
             .vertices
             .iter_mut()
-            .min_by_key(|v| C(v.distance_squared(mouse_pos.plane_pos)))
+            .min_by_key(|v| C(v.distance_squared(*mouse_pos.plane_pos)))
         {
-            *closest_vertex = mouse_pos.plane_pos;
+            *closest_vertex = Vec3::from(mouse_pos.plane_pos).xz();
         }
     }
 }
@@ -343,7 +344,7 @@ fn draw_object(
     // Object selected?
     if let Some(uuid) = selected_object.0 {
         if let Some(object) = terrain.objects.iter_mut().find(|o| o.uuid == uuid) {
-            object.vertices.push(mouse_pos.plane_pos);
+            object.vertices.push(Vec3::from(mouse_pos.plane_pos).xz());
             object.update_aabb();
             return;
         } else {
@@ -354,8 +355,8 @@ fn draw_object(
     let uuid = Uuid::new_v4();
     terrain.objects.push(TerrainObject {
         uuid,
-        vertices: vec![mouse_pos.plane_pos],
-        aabb: Aabb2d::from_point_cloud(Vec2::ZERO, &[mouse_pos.plane_pos]),
+        vertices: vec![Vec3::from(mouse_pos.plane_pos).xz()],
+        aabb: Aabb2d::from_point_cloud(Vec2::ZERO, &[Vec3::from(mouse_pos.plane_pos).xz()]),
     });
     selected_object.0 = Some(uuid);
 }

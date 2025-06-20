@@ -2,6 +2,7 @@ use super::{
     lua::{AppLuaExt, AssetPathExt, LuaExt, Protos},
     map::MapEntity,
     structure::Model,
+    targetable::{Facing, Position},
 };
 use crate::{
     AppExt, GameState,
@@ -11,7 +12,7 @@ use crate::{
         unit::{
             attack::{AutoAttackTarget, AutoAttackTimer, AutoAttackType},
             effect::{CustomData, EffectList},
-            state::{State, StateList},
+            state::StateList,
             stats::{BaseStats, StatBlock},
         },
         vision::{SightRange, VisibleBy},
@@ -23,7 +24,6 @@ use bevy::{
     platform::collections::HashMap,
     prelude::*,
 };
-use bevy_enhanced_input::prelude::*;
 use lightyear::prelude::*;
 use lobby_common::Team;
 use mlua::prelude::*;
@@ -53,6 +53,8 @@ pub fn common(app: &mut App) {
     app.register_component::<MovementTarget>(ChannelDirection::ServerToClient);
     app.register_component::<Unit>(ChannelDirection::ServerToClient);
     app.register_component::<UnitId>(ChannelDirection::ServerToClient);
+    app.register_component::<UnitType>(ChannelDirection::ServerToClient);
+    app.register_component::<ControlledByClient>(ChannelDirection::ServerToClient);
 
     app.init_resource::<Protos<UnitProto>>();
     app.init_resource::<UnitMap>();
@@ -105,11 +107,13 @@ impl SpawnUnit {
 
         let id = world
             .spawn((
-                Transform::from_xyz(args.position.x, 0.0, args.position.y),
+                Transform::from_translation(Position(args.position).into()),
+                Position(args.position),
                 Model(proto.model.clone().relative(&origin)),
                 Unit,
                 args.team,
                 args.data,
+                proto.unit_type,
                 proto.attack_type,
                 MapEntity,
                 Health(proto.base_stats.max_health),
@@ -177,8 +181,7 @@ impl FromLua for W<Team> {
         value
             .as_integer()
             .ok_or_else(|| anyhow!("Expected integer"))
-            .map(|i| i.try_into().map_err(anyhow::Error::from))
-            .flatten()
+            .and_then(|i| i.try_into().map_err(anyhow::Error::from))
             .map(Team)
             .map(W)
             .map_err(LuaError::external)
@@ -195,6 +198,7 @@ impl IntoLua for W<Team> {
 struct UnitProto {
     id: String,
     name: String,
+    unit_type: UnitType,
     attack_type: AutoAttackType,
     base_stats: BaseStats,
     model: AssetPath<'static>,
@@ -205,6 +209,7 @@ proto!(
     struct UnitProto {
         id: String,
         name: String,
+        unit_type: UnitType,
         attack_type: AutoAttackType,
         base_stats: BaseStats,
         model: {W} AssetPath<'static>,
@@ -213,20 +218,48 @@ proto!(
 );
 
 /// Marker struct for units
-#[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-#[require(VisibleBy, SightRange = SightRange(10.0), EffectList, AutoAttackTimer, StateList, CustomData)]
+#[derive(Component, Default, Clone, PartialEq, Serialize, Deserialize)]
+#[require(VisibleBy, SightRange = SightRange(10.0), EffectList, AutoAttackTimer, StateList, CustomData, Facing)]
 pub struct Unit;
 
 /// Where this unit currently wants to go
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-pub struct MovementTarget(pub Vec2);
+pub struct MovementTarget(pub Position);
 
 /// Message for clients to set their controlled unit's movement target.
 #[derive(Debug, Event, Clone, Serialize, Deserialize)]
-pub struct SetUnitMovementTarget(Vec2);
+pub struct SetUnitMovementTarget(Position);
 
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ControlledByClient(pub ClientId);
+
+#[derive(Component, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UnitType {
+    Normal,
+    Champion,
+}
+
+impl FromLua for UnitType {
+    fn from_lua(value: LuaValue, _lua: &Lua) -> LuaResult<Self> {
+        match value.to_string()?.as_str() {
+            "normal" => Ok(Self::Normal),
+            "champion" => Ok(Self::Champion),
+            other => Err(LuaError::external(anyhow!(
+                "{other} is not a valid unit type"
+            ))),
+        }
+    }
+}
+
+impl IntoLua for UnitType {
+    fn into_lua(self, lua: &Lua) -> LuaResult<LuaValue> {
+        lua.create_string(match self {
+            UnitType::Normal => "normal",
+            UnitType::Champion => "champion",
+        })?
+        .into_lua(lua)
+    }
+}
 
 #[derive(Resource, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MyTeam(pub Team);
@@ -273,28 +306,22 @@ impl LuaUserData for UnitProxy {
 
     fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("get_position", |lua, s, ()| {
-            Ok(W(lua
-                .world()
-                .entity(s.entity)
-                .get::<Transform>()
-                .unwrap()
-                .translation
-                .xz()))
+            Ok(W(lua.world().entity(s.entity).get::<Position>().unwrap().0))
         });
 
         methods.add_method("set_position", |lua, s, pos: W<Vec2>| {
             lua.world()
                 .entity_mut(s.entity)
-                .get_mut::<Transform>()
+                .get_mut::<Position>()
                 .unwrap()
-                .translation = pos.extend(0.0).xzy();
+                .0 = pos.0;
             Ok(())
         });
 
         methods.add_method("set_movement_target", |lua, s, pos: W<Vec2>| {
             lua.world()
                 .entity_mut(s.entity)
-                .insert(MovementTarget(pos.0));
+                .insert(MovementTarget(Position(pos.0)));
             Ok(())
         });
 
@@ -324,11 +351,19 @@ impl LuaUserData for UnitProxy {
         methods.add_method("apply_effect", effect::apply_effect);
 
         methods.add_method("get_custom_data", |lua, s, ()| {
-            Ok(lua.world().entity(s.entity).get::<CustomData>().unwrap().clone())
+            Ok(lua
+                .world()
+                .entity(s.entity)
+                .get::<CustomData>()
+                .unwrap()
+                .clone())
         });
 
         methods.add_method("set_custom_data", |lua, s, data: CustomData| {
-            *lua.world().entity_mut(s.entity).get_mut::<CustomData>().unwrap() = data;
+            *lua.world()
+                .entity_mut(s.entity)
+                .get_mut::<CustomData>()
+                .unwrap() = data;
             Ok(())
         });
     }

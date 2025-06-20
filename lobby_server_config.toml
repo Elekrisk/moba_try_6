@@ -1,6 +1,6 @@
 internal_ports = {first = 20000, last = 21000}
 external_ports = {first = 54000, last = 55000}
 launch_mode = "Cargo"
-public_ipv4_address = "213.66.153.240"
-local_ipv4_address = "192.168.0.197"
+public_ipv4_address = "127.0.0.1"
+local_ipv4_address = "127.0.0.1"
 ipv6_address = "2001:2042:9c11:7800::a13"

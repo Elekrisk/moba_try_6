@@ -4,16 +4,18 @@ use lightyear::prelude::*;
 use lobby_common::Team;
 use vleue_navigator::prelude::*;
 
-use crate::ingame::unit::attack::CurrentlyAutoAttacking;
 use crate::AppExt;
 use crate::ingame::lua::LuaCtx;
 use crate::ingame::lua::LuaExt;
 use crate::ingame::lua::Protos;
+use crate::ingame::targetable::Facing;
 use crate::ingame::targetable::Health;
+use crate::ingame::targetable::Position;
 use crate::ingame::unit::MyTeam;
 use crate::ingame::unit::UnitId;
 use crate::ingame::unit::UnitProxy;
 use crate::ingame::unit::attack::AutoAttackTarget;
+use crate::ingame::unit::attack::CurrentlyAutoAttacking;
 use crate::ingame::unit::attack::SetAutoAttackTarget;
 use crate::ingame::unit::state::State;
 use crate::ingame::unit::state::StateList;
@@ -22,6 +24,7 @@ use crate::ingame::unit::stats::StatBlock;
 
 use super::MovementTarget;
 
+use super::SpawnUnit;
 use super::Unit;
 
 use super::ControlledByClient;
@@ -45,14 +48,13 @@ pub fn plugin(app: &mut App) {
             .add_systems(Startup, |mut commands: Commands| {
                 commands.spawn(Actions::<UnitControlContext>::default());
             })
-            // .add_systems(Update, draw_current_path)
-            ;
-        app.add_systems(Update, move_unit_along_path);
+            .add_systems(Update, draw_current_path);
+        // app.add_systems(Update, move_unit_along_path);
     } else {
         app.add_systems(FixedUpdate, unit_pathfinding);
         app.add_systems(FixedUpdate, refresh_movement_target_on_navmesh_reload);
-        app.add_observer(on_set_unit_movement_target);
         app.add_systems(FixedUpdate, move_unit_along_path);
+        app.add_observer(on_set_unit_movement_target);
     }
 }
 
@@ -77,14 +79,14 @@ pub(crate) fn bind_input(
 pub(crate) fn on_move_click(
     _trigger: Trigger<Fired<MoveClick>>,
     mouse_pos: Res<MousePos>,
-    q: Query<(&UnitId, &GlobalTransform, &Team), With<Health>>,
+    q: Query<(&UnitId, &Position, &Team), With<Health>>,
     my_team: Option<Res<MyTeam>>,
     mut commands: Commands,
 ) {
     let Some(my_team) = my_team else { return };
     // Check if we clicked on enemy
-    for (unit_id, trans, team) in q {
-        if *team != my_team.0 && trans.translation().xz().distance(mouse_pos.plane_pos) <= 0.5 {
+    for (unit_id, pos, team) in q {
+        if *team != my_team.0 && pos.distance(*mouse_pos.plane_pos) <= 0.5 {
             commands.client_trigger::<MessageChannel>(SetAutoAttackTarget(*unit_id));
             return;
         }
@@ -137,12 +139,7 @@ pub(crate) fn refresh_movement_target_on_navmesh_reload(
 
 pub(crate) fn unit_pathfinding(
     mut units: Query<
-        (
-            Entity,
-            &Transform,
-            &MovementTarget,
-            Option<&mut CurrentPath>,
-        ),
+        (Entity, &Position, &MovementTarget, Option<&mut CurrentPath>),
         Changed<MovementTarget>,
     >,
     navmesh: Single<(&ManagedNavMesh, Ref<NavMeshStatus>)>,
@@ -155,10 +152,8 @@ pub(crate) fn unit_pathfinding(
         return;
     };
 
-    for (e, trans, target, cur_path) in &mut units {
-        let end = vec3(target.0.x, 0.0, target.0.y);
-
-        if let Some(path) = get_path(&mut commands, navmesh, e, trans, cur_path, end) {
+    for (e, pos, target, cur_path) in &mut units {
+        if let Some(path) = get_path(&mut commands, navmesh, e, *pos, cur_path, target.0) {
             commands.entity(e).insert(CurrentPath(path));
         }
     }
@@ -168,18 +163,29 @@ fn get_path(
     commands: &mut Commands<'_, '_>,
     navmesh: &NavMesh,
     e: Entity,
-    trans: &Transform,
+    start: Position,
     cur_path: Option<Mut<'_, CurrentPath>>,
-    end: Vec3,
-) -> Option<Vec<Vec3>> {
-    let (closest_start, start_on_navmesh) = get_closest_point(navmesh, trans.translation);
-    let (closest_end, _end_on_navmesh) = get_closest_point(navmesh, end);
+    end: Position,
+) -> Option<Vec<Position>> {
+    // dbg!(start);
+    let (closest_start, start_on_navmesh) = get_closest_point(navmesh, start.into());
+    // commands.queue(move |world: &mut World| {
+    //     SpawnUnit(super::SpawnUnitArgs {
+    //         proto: "minion".into(),
+    //         position: Position::from(closest_start.extend(0.0).xzy()).0,
+    //         team: Team(0),
+    //         data: super::effect::CustomData::Nil,
+    //     })
+    //     .apply(world);
+    // });
+    // dbg!(closest_start);
+    let (closest_end, _end_on_navmesh) = get_closest_point(navmesh, end.into());
 
     if let Some(path) = navmesh.get().path(closest_start, closest_end) {
-        let mut path: Vec<Vec3> = path
+        let mut path: Vec<Position> = path
             .path
             .iter()
-            .map(|vec2| navmesh.transform().transform_point(vec2.extend(0.0)))
+            .map(|vec2| navmesh.transform().transform_point(vec2.extend(0.0)).into())
             .collect();
         // if let Some(mut cur_path) = cur_path {
         //     cur_path.0 = path;
@@ -192,7 +198,8 @@ fn get_path(
                 0,
                 navmesh
                     .transform()
-                    .transform_point(closest_start.extend(0.0)),
+                    .transform_point(closest_start.extend(0.0))
+                    .into(),
             );
         }
 
@@ -200,11 +207,7 @@ fn get_path(
     } else {
         warn!(
             "Pathfinding failed (from {} to {})",
-            navmesh
-                .world_to_mesh()
-                .transform_point3(trans.translation)
-                .xy(),
-            closest_end
+            closest_start, closest_end
         );
         None
     }
@@ -253,45 +256,54 @@ fn get_closest_point(navmesh: &NavMesh, end: Vec3) -> (Vec2, bool) {
 }
 
 #[derive(Component, Clone, PartialEq, Serialize, Deserialize)]
-pub(crate) struct CurrentPath(Vec<Vec3>);
+pub(crate) struct CurrentPath(Vec<Position>);
 
 pub(crate) fn draw_current_path(
-    units: Query<(&Transform, &CurrentPath, &Visibility)>,
+    units: Query<(&Position, &CurrentPath, Option<&Visibility>)>,
     mut gizmos: Gizmos,
 ) {
-    for (trans, path, visible) in &units {
-        if path.0.is_empty() || *visible == Visibility::Hidden {
-            return;
+    for (pos, path, visible) in &units {
+        if path.0.is_empty() || visible.copied() == Some(Visibility::Hidden) {
+            continue;
         }
-        let mut start = trans.translation;
-        start.y = 0.06;
-        for [a, b] in std::iter::once([start, *path.0.first().unwrap()])
-            .chain(path.0.array_windows().copied())
+        for [a, b] in
+            std::iter::once([*pos, *path.0.first().unwrap()]).chain(path.0.array_windows().copied())
         {
-            gizmos.line(a, b, Color::srgb(1.0, 0.0, 0.0));
+            gizmos.line(
+                Vec3::from(a).with_y(0.06),
+                Vec3::from(b).with_y(0.06),
+                Color::srgb(1.0, 0.0, 0.0),
+            );
         }
     }
 }
 
 pub(crate) fn move_unit_along_path(
-    mut units: Query<(Entity, &mut Transform, &mut CurrentPath, &StatBlock)>,
+    mut units: Query<(
+        Entity,
+        &mut Position,
+        &mut Facing,
+        &mut CurrentPath,
+        &StatBlock,
+    )>,
     time: Res<Time>,
     mut commands: Commands,
 ) {
-    for (e, mut trans, mut path, stats) in &mut units {
+    for (e, mut pos, mut facing, mut path, stats) in &mut units {
         let speed = stats.move_speed.base;
         let mut travel_dist = time.delta_secs() * speed;
 
         while travel_dist > 0.0001 {
             if let Some(next_step) = path.0.first() {
-                trans.look_at(*next_step, Vec3::Y);
+                let dir = next_step.0 - pos.0;
+                facing.set_if_neq(Facing::from(dir));
 
-                let pos = trans.translation;
-                let newpos = pos.move_towards(*next_step, travel_dist);
-                trans.translation = newpos;
-
+                // let pos = trans.translation;
+                let newpos = pos.move_towards(**next_step, travel_dist);
                 let travelled_dist = pos.distance(newpos);
-                if trans.translation == *next_step {
+
+                pos.0 = newpos;
+                if *pos == *next_step {
                     path.0.remove(0);
                 }
 
@@ -316,6 +328,6 @@ fn on_movement_start(
 
 fn on_movement_end(trigger: Trigger<OnRemove, CurrentPath>, mut q: Query<&mut StateList>) {
     if let Ok(mut state_list) = q.get_mut(trigger.target()) {
-        state_list.remove_state(&State::moving());
+        state_list.remove_state("moving");
     }
 }

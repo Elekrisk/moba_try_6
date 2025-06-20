@@ -21,7 +21,7 @@ use crate::{
 
 use super::{
     lua::{AppLuaExt, AssetPathExt, LuaExt, Protos},
-    targetable::Health,
+    targetable::{Health, Position},
 };
 
 pub fn common(app: &mut App) {
@@ -108,7 +108,8 @@ fn setup_lua(lua: &Lua) -> LuaResult<()> {
 
                 let id = world
                     .spawn((
-                        Transform::from_xyz(args.position.x, 0.0, args.position.y),
+                        Transform::from_translation(Position(args.position).into()),
+                        Position(args.position),
                         Team(args.team),
                         Health(proto.health),
                         Model(path),
