@@ -96,7 +96,7 @@ pub fn update_visibility(
         Entity,
         Ref<Position>,
         &Team,
-        &SightRange,
+        Option<&SightRange>,
         &mut VisibleByEntities,
     )>,
     terrain: Res<Terrain>,
@@ -115,9 +115,12 @@ pub fn update_visibility(
             continue;
         }
 
+        let a_range = a_range.map(|x| x.0).unwrap_or(0.0);
+        let b_range = b_range.map(|x| x.0).unwrap_or(0.0);
+
         // Whether the units are in sight range
-        let a_reaches = a_pos.distance_squared(**b_pos) <= a_range.0 * a_range.0;
-        let b_reaches = b_pos.distance_squared(**a_pos) <= b_range.0 * b_range.0;
+        let a_reaches = a_pos.distance_squared(**b_pos) <= a_range.squared();
+        let b_reaches = b_pos.distance_squared(**a_pos) <= b_range.squared();
 
         // If there is a free sightline between them
         // If neither part is in range of the other, don't actually do the check,

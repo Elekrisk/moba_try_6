@@ -138,7 +138,7 @@ fn main() -> AppExit {
                 Duration::from_secs_f64(1.0 / 60.0),
             )),
             LogPlugin {
-                // filter: "lightyear=debug".into(),
+                // filter: "lightyear=trace".into(),
                 // level: bevy::log::Level::DEBUG,
                 ..default()
             },
@@ -153,15 +153,15 @@ fn main() -> AppExit {
         .add_systems(FixedFirst, |mut timing: ResMut<Timing>| {
             timing.0 = std::time::Instant::now();
         })
-        .add_systems(
-            FixedLast,
-            |timing: Res<Timing>, mut fixed_update: ResMut<ServerFixedUpdateDuration>| {
-                let time = std::time::Instant::now()
-                    .duration_since(timing.0)
-                    .as_secs_f32();
-                fixed_update.0 = time;
-            },
-        )
+        // .add_systems(
+        //     FixedLast,
+        //     |timing: Res<Timing>, mut fixed_update: ResMut<ServerFixedUpdateDuration>| {
+        //         let time = std::time::Instant::now()
+        //             .duration_since(timing.0)
+        //             .as_secs_f32();
+        //         fixed_update.0 = time;
+        //     },
+        // )
         .run()
 }
 

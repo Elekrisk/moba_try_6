@@ -14,7 +14,7 @@ tracing = { version = "0.1", features = [
     "max_level_debug",
     # "release_max_level_warn",
 ] }
-lightyear = { version = "0.20.2", features = ["udp"] }
+lightyear = { path = "../../../src/lightyear/lightyear", version = "0.20.3", features = ["udp"] }
 xwt-core = "0.6.0"
 # bevy-tokio-tasks = "0.16.0"
 tokio = { version = "1.45", features = [

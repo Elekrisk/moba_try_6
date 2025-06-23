@@ -23,6 +23,7 @@ pub mod loading;
 pub mod map;
 pub mod navmesh;
 pub mod network;
+pub mod projectile;
 pub mod structure;
 pub mod targetable;
 pub mod terrain;
@@ -51,6 +52,7 @@ pub fn common(app: &mut App) {
         unit::common,
         loading::plugin,
         vision::plugin,
+        projectile::plugin,
     ));
 
     app.register_resource::<Players>(lightyear::prelude::ChannelDirection::ServerToClient);
@@ -78,9 +80,7 @@ pub fn common(app: &mut App) {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SystemSets {
-    
-}
+pub struct SystemSets {}
 
 fn players_added(players: Res<Players>, my_id: Res<MyPlayerId>, mut commands: Commands) {
     for player in players.players.values() {

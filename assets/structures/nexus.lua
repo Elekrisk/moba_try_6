@@ -217,7 +217,9 @@ local function adjust_spawn_pos(pos: Vec2, angle: number)
     return {x = pos.x + math.cos(angle) * 2.5, y = pos.y + math.sin(angle) * 2.5}
 end
 
-local function spawn_unit(unit: UnitProxy, wave_count: number)
+local function spawn_unit(unit: UnitProxy, unit_count: number, wave_count: number)
+    local proto = if unit_count <= 3 then "minion" else "minion.ranged"
+
     local spawn_pos = unit:get_position()
 
     -- We need to spawn the minion slightly outside the range of the nexus,
@@ -256,7 +258,7 @@ local function spawn_unit(unit: UnitProxy, wave_count: number)
     local bot_target = if team == 0 then red_bot_spawn else blue_bot_spawn
     
     local minion0 = game.spawn_unit {
-        proto = "minion",
+        proto = proto,
         team = team,
         position = top_spawn,
         data = {
@@ -265,7 +267,7 @@ local function spawn_unit(unit: UnitProxy, wave_count: number)
     }
 
     local minion1 = game.spawn_unit {
-        proto = "minion",
+        proto = proto,
         team = team,
         position = mid_spawn,
         data = {
@@ -274,7 +276,7 @@ local function spawn_unit(unit: UnitProxy, wave_count: number)
     }
 
     local minion2 = game.spawn_unit {
-        proto = "minion",
+        proto = proto,
         team = team,
         position = bot_spawn,
         data = {
@@ -285,7 +287,7 @@ end
 
 game.register_effect {
     id = "nexus.minion_spawning",
-    update_rate = 0.1,
+    update_rate = 1,
     on_update = function(unit, effect)
         local data = effect:get_custom_data() :: MinionSpawnData
 
@@ -298,7 +300,7 @@ game.register_effect {
         end
 
         if data.spawned_units < data.wave_size then
-            spawn_unit(unit, data.wave_count)
+            spawn_unit(unit, data.spawned_units + 1, data.wave_count)
             data.spawned_units += 1
         end
 

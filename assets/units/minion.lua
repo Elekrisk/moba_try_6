@@ -8,8 +8,8 @@ game.register_unit{
     attack_type = "melee",
     base_stats = {
         max_health = 100.0,
-        move_speed = 10.0,
-        attack_speed = 10.0,
+        move_speed = 1.5,
+        attack_speed = 1.0,
         attack_a = 10.0,
         attack_b = 0.0,
         attack_c = 0.0,
@@ -21,12 +21,41 @@ game.register_unit{
     model = "./minion.glb#Scene0",
     on_spawn = function (unit)
         unit:apply_effect{
-            proto = "minion.ai",
-            data = {
-                movement_target = {x = 0, y = 0}
-            }
+            proto = "minion.ai"
         }
     end
+}
+
+game.register_unit{
+    id = "minion.ranged",
+    name = "Ranged Minion",
+    unit_type = "normal",
+    attack_type = "projectile",
+    projectile_proto = "minion.proj",
+    base_stats = {
+        max_health = 100.0,
+        move_speed = 1.5,
+        attack_speed = 0.75,
+        attack_a = 10.0,
+        attack_b = 0.0,
+        attack_c = 0.0,
+        resistance_a = 0.0,
+        resistance_b = 0.0,
+        resistance_c = 0.0,
+        range = 3.0,
+    },
+    model = "./minion.glb#Scene0",
+    on_spawn = function (unit)
+        unit:apply_effect{
+            proto = "minion.ai"
+        }
+    end
+}
+
+game.register_projectile{
+    id = "minion.proj",
+    name = "Ranged Minion Projectile",
+    model = "./projectile.glb#Scene0"
 }
 
 type AiData = {
@@ -52,7 +81,7 @@ game.register_effect{
 
         for _, unit in units do
             local dist = sqr_dist(my_pos, unit:get_position())
-            if dist < 10.0 and dist < closest_dist then
+            if dist < 25.0 and dist < closest_dist then
                 closest_dist = dist
                 closest_unit = unit
             end

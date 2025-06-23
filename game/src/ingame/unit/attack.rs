@@ -8,13 +8,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ingame::{
-        lua::{LuaCtx, LuaExt, Protos},
-        structure::Model,
-        targetable::{Health, Position},
-        unit::{
+        lua::{LuaCtx, LuaExt, Protos}, projectile::{SpawnProjectile, SpawnProjectileArgs}, structure::Model, targetable::{Health, Position}, unit::{
             animation::{AnimationPlayerProxy, GltfAnimations}, movement::CurrentPath, state::{State, StateList, StateProto}, stats::StatBlock, ControlledByClient, MovementTarget, UnitId, UnitMap, UnitProxy
-        },
-        vision::VisibleBy,
+        }, vision::VisibleBy
     }, AppExt, Options
 };
 
@@ -235,9 +231,19 @@ impl Command for PerformAutoAttack {
                     .apply(e);
                 }
             }
-            AutoAttackType::Projectile => {
+            AutoAttackType::Projectile(proto) => {
                 // We first create a projectile that then deals damage
-                todo!()
+                let proto = proto.clone().unwrap();
+
+                let pos = **world.entity(self.source).get::<Position>().unwrap();
+
+                SpawnProjectile(SpawnProjectileArgs {
+                    proto,
+                    position: pos,
+                    source_unit: UnitProxy { entity: self.source },
+                    target: crate::ingame::projectile::ProjectileTarget::Entity(self.target),
+                    speed: 5.0,
+                }).apply(world);
             }
         }
     }
@@ -259,17 +265,17 @@ impl EntityCommand for ApplyDamage {
     }
 }
 
-#[derive(Debug, Component, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Component, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AutoAttackType {
     Melee,
-    Projectile,
+    Projectile(Option<String>),
 }
 
 impl FromLua for AutoAttackType {
     fn from_lua(value: mlua::Value, _lua: &mlua::Lua) -> mlua::Result<Self> {
         match value.to_string()?.as_str() {
             "melee" => Ok(Self::Melee),
-            "projectile" => Ok(Self::Projectile),
+            "projectile" => Ok(Self::Projectile(None)),
             e => Err(mlua::Error::external(anyhow::anyhow!(
                 "{e} is not a valid auto attack type; must be one of melee or projectile"
             ))),
@@ -281,7 +287,7 @@ impl IntoLua for AutoAttackType {
     fn into_lua(self, lua: &mlua::Lua) -> mlua::Result<mlua::Value> {
         match self {
             AutoAttackType::Melee => "melee",
-            AutoAttackType::Projectile => "projectile",
+            AutoAttackType::Projectile(_) => "projectile",
         }
         .into_lua(lua)
     }

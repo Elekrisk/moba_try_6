@@ -48,7 +48,8 @@ pub fn plugin(app: &mut App) {
             .add_systems(Startup, |mut commands: Commands| {
                 commands.spawn(Actions::<UnitControlContext>::default());
             })
-            .add_systems(Update, draw_current_path);
+            // .add_systems(Update, draw_current_path)
+            ;
         // app.add_systems(Update, move_unit_along_path);
     } else {
         app.add_systems(FixedUpdate, unit_pathfinding);

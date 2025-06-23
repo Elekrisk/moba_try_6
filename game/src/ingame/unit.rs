@@ -105,6 +105,13 @@ impl SpawnUnit {
             .get(&args.proto)
             .unwrap();
 
+        let mut attack_type = proto.attack_type.clone();
+        if let AutoAttackType::Projectile(ref mut proto_cont) = attack_type
+            && let Some(proj_proto) = proto.projectile_proto.clone()
+        {
+            *proto_cont = Some(proj_proto);
+        }
+
         let id = world
             .spawn((
                 Transform::from_translation(Position(args.position).into()),
@@ -114,7 +121,7 @@ impl SpawnUnit {
                 args.team,
                 args.data,
                 proto.unit_type,
-                proto.attack_type,
+                attack_type,
                 MapEntity,
                 Health(proto.base_stats.max_health),
                 StatBlock::from(proto.base_stats.clone()),
@@ -200,6 +207,7 @@ struct UnitProto {
     name: String,
     unit_type: UnitType,
     attack_type: AutoAttackType,
+    projectile_proto: Option<String>,
     base_stats: BaseStats,
     model: AssetPath<'static>,
     on_spawn: Option<LuaFunction>,
@@ -211,6 +219,7 @@ proto!(
         name: String,
         unit_type: UnitType,
         attack_type: AutoAttackType,
+        projectile_proto: Option<String>,
         base_stats: BaseStats,
         model: {W} AssetPath<'static>,
         on_spawn: Option<LuaFunction>,

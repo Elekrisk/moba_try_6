@@ -53,8 +53,9 @@ export type BaseStats = {
 export type UnitProto = {
     id: string,
     name: string,
-    unit_type: "normal" | "champion",
     attack_type: "melee" | "projectile",
+    projectile_proto: string?,
+    unit_type: "normal" | "champion",
     base_stats: BaseStats,
     model: string,
     on_spawn: (UnitProxy) -> ()?
@@ -69,6 +70,20 @@ export type EffectProto = {
     on_removed: (UnitProxy, EffectProxy) -> ()?,
     on_update: (UnitProxy, EffectProxy) -> ()?,
 }
+
+export type ProjectileProto = {
+    id: string,
+    name: string,
+    model: string,
+    on_spawn: (UnitProxy) -> ()?,
+    on_reach_target: (UnitProxy, UnitProxy?) -> ()?,
+    on_collide: (UnitProxy, UnitProxy) -> ()?,
+    on_destroy: (UnitProxy) -> ()?,
+}
+
+export type ProjectileTarget = UnitProxy | Vec2 | Dir2
+
+export type Dir2 = {x: number, y: number, is_dir: true}
 
 declare game: {
     ensure_loaded: (path: string) -> (),
@@ -86,4 +101,7 @@ declare game: {
     spawn_unit: (args: { proto: string, team: number, position: Vec2, data: CustomData }) -> (UnitProxy?),
 
     register_effect: (proto: EffectProto) -> EffectProto,
+
+    register_projectile: (proto: ProjectileProto) -> ProjectileProto,
+    spawn_projectile: (args: { proto: string, position: Vec2, source_unit: UnitProxy, target: ProjectileTarget, speed: number}) -> UnitProxy
 }

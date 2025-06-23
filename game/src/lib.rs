@@ -64,19 +64,19 @@ pub fn client(app: &mut App) {
 pub fn server(app: &mut App) {
     app.add_plugins(ingame::server);
     app.insert_state(GameState::Loading);
-    // app.add_systems(
-    //     Update,
-    //     |ps: Option<Res<ServerConnectionManager>>,
-    //      mut exit: EventWriter<AppExit>,
-    //      time: Res<Time>| {
-    //         if let Some(server) = ps
-    //             && server.connected_clients().next().is_none()
-    //             && time.elapsed_secs() > 15.0
-    //         {
-    //             exit.write(AppExit::Success);
-    //         }
-    //     },
-    // );
+    app.add_systems(
+        Update,
+        |ps: Option<Res<ServerConnectionManager>>,
+         mut exit: EventWriter<AppExit>,
+         time: Res<Time>| {
+            if let Some(server) = ps
+                && server.connected_clients().next().is_none()
+                && time.elapsed_secs() > 15.0
+            {
+                exit.write(AppExit::Success);
+            }
+        },
+    );
     common(app);
 }
 
